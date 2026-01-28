@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Attendance {
+  ATTENDANCE
+  ABSENT
+}
+
+enum ParticipationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  PARTICIPATION_REQUEST
+  PARTICIPATION_ACCEPTED
+  PARTICIPATION_REJECTED
+  PARTICIPATION_CANCELLED
+  MEETING_DELETED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  password     String?
+  nickname     String   @unique
+  bio          String?  @db.Text
+  image        String?
+  resetToken   String?
+  refreshToken String?  @unique
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  socialAccount         SocialAccount?
+  interests             UserInterest[]
+  meetings              Meeting[]       @relation("HostedMeetings")
+  participations        Participation[]
+  messages              ChatMessage[]
+  receivedNotifications Notification[]  @relation("ReceivedNotifications")
+  sentNotifications     Notification[]  @relation("SentNotifications")
+
+  @@map("users")
+}
+
+model SocialAccount {
+  id          Int      @id @default(autoincrement())
+  googleSubId String   @unique @map("google_sub_id")
+  userId      Int      @unique @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("social_accounts")
+}
+
+model Interest {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  userInterests UserInterest[]
+  meetings      Meeting[]
+
+  @@map("interests")
+}
+
+model UserInterest {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  interestId Int      @map("interest_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@map("user_interests")
+}
+
+model Meeting {
+  id              Int      @id @default(autoincrement())
+  title           String   @db.VarChar(100)
+  description     String   @db.VarChar(4000)
+  currentParticipants Int @default(1) @map("current_participants")
+  maxParticipants Int      @map("max_participants")
+  meetingDate     DateTime @map("meeting_date")
+  image           String?
+  interestId      Int      @map("interest_id")
+  address         String   @db.Text
+  latitude        Float
+  longitude       Float
+  meetingDeleted      Boolean  @default(false) @map("meeting_deleted")
+
+  hostId    Int      @map("host_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  host           User            @relation("HostedMeetings", fields: [hostId], references: [id], onDelete: Cascade)
+  interest       Interest        @relation(fields: [interestId], references: [id])
+  participations Participation[]
+  messages       ChatMessage[]
+  notifications  Notification[]
+
+  @@map("meetings")
+}
+
+model Participation {
+  id        Int                 @id @default(autoincrement())
+  userId    Int                 @map("user_id")
+  meetingId Int                 @map("meeting_id")
+  status    ParticipationStatus @default(PENDING)
+  checkedIn Attendance?         @map("checked_in")
+  lastReadAt DateTime            @default(now()) @map("last_read_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, meetingId], name: "userIdMeetingId")
+  @@map("participations")
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  senderId  Int      @map("sender_id")
+  meetingId Int      @map("meeting_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sender  User    @relation(fields: [senderId], references: [id] , onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, createdAt])
+  @@map("chat_messages")
+}
+
+model Notification {
+  id         Int              @id @default(autoincrement())
+  meetingId  Int?             @map("meeting_id")
+  receiverId Int              @map("receiver_id")
+  senderId   Int?             @map("sender_id")
+  type       NotificationType
+  isRead     Boolean          @default(false) @map("is_read")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
+  receiver   User             @relation("ReceivedNotifications", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User?            @relation("SentNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+  meeting    Meeting?         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, isRead])
+  @@map("notifications")
+}
