@@ -160,9 +160,11 @@ model Lesson {
   teacherId           Int          @map("teacher_id")
   largeCategoryId     Int          @map("large_category_id")
   title               String       @db.VarChar(50)
-  description         String       
+  description         String       @db.Text
   level               Level
   durationMin         Int          @map("duration_min")
+  curriculum          String       @db.Text
+  
   price               Int          @default(0)
   maxParticipants     Int?         @map("max_participants")
   currentParticipants Int          @default(0) @map("current_participants")
