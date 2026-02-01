@@ -164,8 +164,11 @@ model Lesson {
   level               Level
   durationMin         Int          @map("duration_min")
   curriculum          String       @db.Text
-  
-  price               Int          @default(0)
+
+  price               Int?         @default(0)
+  discountRate        Int?         @default(0) @map("discount_rate")
+  discountedPrice     Int?         @map("discounted_price")
+
   maxParticipants     Int?         @map("max_participants")
   currentParticipants Int          @default(0) @map("current_participants")
   representativeImage String?      @map("representative_image")
