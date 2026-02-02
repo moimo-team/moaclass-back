@@ -38,33 +38,6 @@ interface GoogleUserInfo {
   picture: string;
   locale: string;
 }
-
-interface KakaoTokenResponse {
-  access_token: string;
-  token_type: string; // 항상 "bearer"
-  refresh_token: string;
-  expires_in: number; // access_token 만료 시간(초)
-  scope?: string; // 부여된 권한 범위 (옵션)
-  refresh_token_expires_in: number; // refresh_token 만료 시간(초)
-}
-
-interface KakaoUserInfo {
-  id: number; // 카카오 고유 사용자 ID
-  connected_at?: string; // 연결 시각
-  kakao_account?: {
-    profile_needs_agreement?: boolean;
-    profile?: {
-      nickname?: string;
-      thumbnail_image_url?: string;
-      profile_image_url?: string;
-    };
-    email_needs_agreement?: boolean;
-    is_email_valid?: boolean;
-    is_email_verified?: boolean;
-    email?: string;
-  };
-}
-
 export interface ResetTokenPayload {
   email: string;
   code: string;
@@ -148,10 +121,9 @@ export class UsersService {
   ): Promise<{
     accessToken: string;
     refreshToken: string;
-    user: { isNewUser: boolean; email: string; nickname: string | null };
+    user: { isNewUser: boolean; email: string; nickname: string };
   }> {
     try {
-      // 1. 구글 토큰 발급
       const tokenRes = await axios.post<GoogleTokenResponse>(
         'https://oauth2.googleapis.com/token',
         {
@@ -166,33 +138,25 @@ export class UsersService {
 
       const googleAccessToken = tokenRes.data.access_token;
 
-      // 2. 구글 사용자 정보 가져오기
       const userInfoRes = await axios.get<GoogleUserInfo>(
         'https://www.googleapis.com/oauth2/v2/userinfo',
         { headers: { Authorization: `Bearer ${googleAccessToken}` } },
       );
 
-      const { email, name, id: googleSubId, picture } = userInfoRes.data;
+      const { email, name, id: googleSubId } = userInfoRes.data;
 
-      // 3. DB에서 유저 찾기 (provider + providerId 기준)
-      let user = await this.prisma.user.findUnique({
-        where: { providerId: googleSubId },
-      });
+      let user = await this.prisma.user.findUnique({ where: { email } });
 
-      // 4. 없으면 새로 생성
       if (!user) {
         user = await this.prisma.user.create({
-          data: {
-            email,
-            nickname: name,
-            provider: 'google',
-            providerId: googleSubId,
-            image: picture, // 구글 프로필 이미지 저장 가능
-          },
+          data: { email, nickname: name },
+        });
+
+        await this.prisma.socialAccount.create({
+          data: { googleSubId, userId: user.id },
         });
       }
 
-      // 5. 토큰 발급
       const refreshToken = await this.issueOrRefreshToken(user);
       const accessToken = this.issueAccessToken(user);
 
@@ -210,87 +174,7 @@ export class UsersService {
     }
   }
 
-  // 🔹 카카오 로그인
-  async loginWithKakao(
-    code: string,
-    redirectUri: string,
-  ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: { isNewUser: boolean; email: string; nickname: string };
-  }> {
-    try {
-      // 1. 카카오 토큰 발급
-      const tokenRes = await axios.post<KakaoTokenResponse>(
-        'https://kauth.kakao.com/oauth/token',
-        null,
-        {
-          params: {
-            grant_type: 'authorization_code',
-            client_id: process.env.KAKAO_CLIENT_ID,
-            client_secret: process.env.KAKAO_CLIENT_SECRET,
-            redirect_uri: redirectUri,
-            code,
-          },
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
-      );
-
-      const kakaoAccessToken = tokenRes.data.access_token;
-
-      // 2. 카카오 사용자 정보 가져오기
-      const userInfoRes = await axios.get<KakaoUserInfo>(
-        'https://kapi.kakao.com/v2/user/me',
-        {
-          headers: { Authorization: `Bearer ${kakaoAccessToken}` },
-        },
-      );
-
-      const kakaoData = userInfoRes.data;
-      const kakaoSubId = kakaoData.id.toString();
-      const email = kakaoData.kakao_account?.email ?? `${kakaoSubId}@kakao.com`;
-      const nickname =
-        kakaoData.kakao_account?.profile?.nickname ?? '카카오유저';
-      const picture =
-        kakaoData.kakao_account?.profile?.profile_image_url ?? null;
-
-      // 3. DB에서 유저 찾기 (provider + providerId 기준)
-      let user = await this.prisma.user.findUnique({
-        where: { providerId: kakaoSubId },
-      });
-
-      // 4. 없으면 새로 생성
-      if (!user) {
-        user = await this.prisma.user.create({
-          data: {
-            email,
-            nickname,
-            provider: 'kakao',
-            providerId: kakaoSubId,
-            image: picture,
-          },
-        });
-      }
-
-      // 5. 토큰 발급
-      const refreshToken = await this.issueOrRefreshToken(user);
-      const accessToken = this.issueAccessToken(user);
-
-      return {
-        accessToken,
-        refreshToken,
-        user: {
-          isNewUser: !user.bio,
-          email: user.email,
-          nickname: user.nickname ?? '',
-        },
-      };
-    } catch (err: any) {
-      throw new InternalServerErrorException(`카카오 로그인 실패: ${err}`);
-    }
-  }
-
-  // // 🔹 일반 로그인
+  // 🔹 일반 로그인
   // async login(email: string, password: string) {
   //   const user = await this.prisma.user.findUnique({ where: { email } });
   //   if (!user || !user.password) {
@@ -320,98 +204,98 @@ export class UsersService {
   //   };
   // }
 
-  // async updateUser(
-  //   userId: number,
-  //   dto: UpdateExtraInfoDto,
-  //   file?: Express.Multer.File,
-  // ) {
-  //   if (!userId) throw new Error('User ID is missing');
+  async updateUser(
+    userId: number,
+    dto: UpdateExtraInfoDto,
+    file?: Express.Multer.File,
+  ) {
+    if (!userId) throw new Error('User ID is missing');
 
-  //   if (dto.nickname) {
-  //     const exists = await this.prisma.user.findFirst({
-  //       where: { nickname: dto.nickname, id: { not: userId } },
-  //       select: { id: true },
-  //     });
-  //     if (exists) throw new ConflictException('Nickname already in use');
-  //   }
+    if (dto.nickname) {
+      const exists = await this.prisma.user.findFirst({
+        where: { nickname: dto.nickname, id: { not: userId } },
+        select: { id: true },
+      });
+      if (exists) throw new ConflictException('Nickname already in use');
+    }
 
-  //   let imageUrl: string | undefined;
-  //   console.log(file);
+    let imageUrl: string | undefined;
+    console.log(file);
 
-  //   if (file) {
-  //     imageUrl = await this.uploadService.uploadFile('profile', file);
-  //   }
+    if (file) {
+      imageUrl = await this.uploadService.uploadFile('profile', file);
+    }
 
-  //   const userBaseUpdate = await this.prisma.user.update({
-  //     where: { id: userId },
-  //     data: {
-  //       nickname: dto.nickname,
-  //       bio: dto.bio,
-  //       ...(imageUrl ? { image: imageUrl } : {}),
-  //     },
-  //     select: {
-  //       id: true,
-  //       email: true,
-  //       nickname: true,
-  //       bio: true,
-  //       image: true,
-  //     },
-  //   });
+    const userBaseUpdate = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        nickname: dto.nickname,
+        bio: dto.bio,
+        ...(imageUrl ? { image: imageUrl } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        nickname: true,
+        bio: true,
+        image: true,
+      },
+    });
 
-  //   if (dto.interests && dto.interests.length > 0) {
-  //     const validInterests = await this.prisma.interest.findMany({
-  //       where: { id: { in: dto.interests } },
-  //       select: { id: true },
-  //     });
-  //     const validIds = new Set(validInterests.map((i) => i.id));
+    if (dto.interests && dto.interests.length > 0) {
+      const validInterests = await this.prisma.interest.findMany({
+        where: { id: { in: dto.interests } },
+        select: { id: true },
+      });
+      const validIds = new Set(validInterests.map((i) => i.id));
 
-  //     const currentLinks = await this.prisma.userInterest.findMany({
-  //       where: { userId },
-  //       select: { id: true, interestId: true },
-  //     });
+      const currentLinks = await this.prisma.userInterest.findMany({
+        where: { userId },
+        select: { id: true, interestId: true },
+      });
 
-  //     const desired = Array.from(validIds);
+      const desired = Array.from(validIds);
 
-  //     const toDelete = currentLinks
-  //       .filter((link) => !validIds.has(link.interestId))
-  //       .map((link) => link.id);
+      const toDelete = currentLinks
+        .filter((link) => !validIds.has(link.interestId))
+        .map((link) => link.id);
 
-  //     const currentIds = new Set(currentLinks.map((l) => l.interestId));
-  //     const toAdd = desired.filter((id) => !currentIds.has(id));
+      const currentIds = new Set(currentLinks.map((l) => l.interestId));
+      const toAdd = desired.filter((id) => !currentIds.has(id));
 
-  //     await this.prisma.$transaction([
-  //       ...(toDelete.length
-  //         ? [
-  //             this.prisma.userInterest.deleteMany({
-  //               where: { id: { in: toDelete } },
-  //             }),
-  //           ]
-  //         : []),
-  //       ...toAdd.map((interestId) =>
-  //         this.prisma.userInterest.create({
-  //           data: { userId, interestId },
-  //         }),
-  //       ),
-  //     ]);
-  //   }
+      await this.prisma.$transaction([
+        ...(toDelete.length
+          ? [
+              this.prisma.userInterest.deleteMany({
+                where: { id: { in: toDelete } },
+              }),
+            ]
+          : []),
+        ...toAdd.map((interestId) =>
+          this.prisma.userInterest.create({
+            data: { userId, interestId },
+          }),
+        ),
+      ]);
+    }
 
-  //   const interests = await this.prisma.userInterest.findMany({
-  //     where: { userId },
-  //     include: { interest: true },
-  //   });
+    const interests = await this.prisma.userInterest.findMany({
+      where: { userId },
+      include: { interest: true },
+    });
 
-  //   return {
-  //     id: userBaseUpdate.id,
-  //     email: userBaseUpdate.email,
-  //     nickname: userBaseUpdate.nickname,
-  //     bio: userBaseUpdate.bio,
-  //     image: userBaseUpdate.image,
-  //     interests: interests.map((i) => ({
-  //       id: i.interestId,
-  //       name: i.interest.name,
-  //     })),
-  //   };
-  // }
+    return {
+      id: userBaseUpdate.id,
+      email: userBaseUpdate.email,
+      nickname: userBaseUpdate.nickname,
+      bio: userBaseUpdate.bio,
+      image: userBaseUpdate.image,
+      interests: interests.map((i) => ({
+        id: i.interestId,
+        name: i.interest.name,
+      })),
+    };
+  }
 
   // async findById(userId: number) {
   //   const user = await this.prisma.user.findUnique({
@@ -444,6 +328,7 @@ export class UsersService {
 
   //   return !existing;
   // }
+
 
   // async isEmailAvailable(email: string): Promise<boolean> {
   //   const existing = await this.prisma.user.findFirst({
@@ -605,19 +490,19 @@ export class UsersService {
   //   return;
   // }
 
-  // generateAccessToken(payload: any) {
-  //   return this.jwtService.sign(payload, {
-  //     secret: process.env.JWT_SECRET,
-  //     expiresIn: '15m', // accessToken은 짧게
-  //   });
-  // }
+  generateAccessToken(payload: any) {
+    return this.jwtService.sign(payload, {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '15m', // accessToken은 짧게
+    });
+  }
 
-  // generateRefreshToken(payload: any) {
-  //   return this.jwtService.sign(payload, {
-  //     secret: process.env.JWT_SECRET,
-  //     expiresIn: '7d', // refreshToken은 길게
-  //   });
-  // }
+  generateRefreshToken(payload: any) {
+    return this.jwtService.sign(payload, {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '7d', // refreshToken은 길게
+    });
+  }
 
   // async verifyUser(id: number) {
   //   console.log(id);
