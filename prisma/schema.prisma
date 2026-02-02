@@ -23,7 +23,9 @@ enum LessonStatus {
   CLOSED
   COMPLETED
   DELETED
-  PENDING
+  DRAFT
+  DORMANT
+  DUPLICATED
 }
 
 enum Level {
@@ -58,7 +60,6 @@ model User {
   nickname     String?  @unique
   provider     String   // kakao or google
   providerId   String   @unique @map("provider_id")
-  bio          String?
   image        String?
   point        Int      @default(0)
   resetToken   String?  @map("reset_token")
@@ -186,6 +187,7 @@ model Lesson {
   satClose      String? @map("sat_close")
   sunOpen       String? @map("sun_open")
   sunClose      String? @map("sun_close")
+  isSameDayReservable Boolean      @default(false) @map("is_same_day_reservable")
   operationNote String? @map("operation_notes")
 
   status          LessonStatus @default(RECRUITING)
