@@ -15,15 +15,15 @@ interface RequestWithUser extends Request {
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  @Get()
-  @UseGuards(JwtAuthGuard)
-  async findAll(
-    @Query() pageOptionsDto: GetNotificationsDto,
-    @Req() req: RequestWithUser,
-  ): Promise<PageDto<NotificationItemDto>> {
-    return await this.notificationsService.getNotifications(
-      req.user.id,
-      pageOptionsDto,
-    );
-  }
+  // @Get()
+  // @UseGuards(JwtAuthGuard)
+  // async findAll(
+  //   @Query() pageOptionsDto: GetNotificationsDto,
+  //   @Req() req: RequestWithUser,
+  // ): Promise<PageDto<NotificationItemDto>> {
+  //   return await this.notificationsService.getNotifications(
+  //     req.user.id,
+  //     pageOptionsDto,
+  //   );
+  // }
 }
