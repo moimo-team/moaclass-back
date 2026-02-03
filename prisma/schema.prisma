@@ -7,6 +7,7 @@ datasource db {
 }
 
 enum Attendance {
+  PENDING
   ATTENDANCE
   ABSENT
 }
@@ -19,13 +20,17 @@ enum ParticipationStatus {
 }
 
 enum LessonStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+  DRAFT
+  DUPLICATED
+}
+
+enum LessonScheduleStatus {
   RECRUITING
   CLOSED
   COMPLETED
-  DELETED
-  DRAFT
-  DORMANT
-  DUPLICATED
 }
 
 enum Level {
@@ -35,6 +40,12 @@ enum Level {
 }
 
 enum NotificationType {
+  PARTICIPATION_REQUEST
+  PARTICIPATION_ACCEPTED
+  PARTICIPATION_REJECTED
+  PARTICIPATION_CANCELLED
+  MEETING_DELETED
+
   COMMENT_ON_LESSON
   REPLY_ON_COMMENT
   PAYMENT_SUCCESS
@@ -46,98 +57,108 @@ enum NotificationType {
   NEW_CHAT
 }
 
-enum TargetType {
-  COMMENT
-  LESSON
-  PAYMENT
-  CHAT
+enum ProviderType {
+  GOOGLE
+  KAKAO
 }
 
+//검토완료
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  nickname     String?  @unique
-  provider     String   // kakao or google
-  providerId   String   @unique @map("provider_id")
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
+  nickname     String       @unique
+  provider     ProviderType
+  providerId   String       @unique @map("provider_id")
+  bio          String?      @db.Text
   image        String?
-  point        Int      @default(0)
-  resetToken   String?  @map("reset_token")
-  refreshToken String?  @unique @map("refresh_token")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  point        Int          @default(0)
+  resetToken   String?      @map("reset_token")
+  refreshToken String?      @unique @map("refresh_token")
+  deletedAt    DateTime?    @map("deleted_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at")
 
-  regionId          Int?               @map("region_id")
-  region            Region?            @relation(fields: [regionId], references: [id])
+  regionId Int?    @map("region_id")
+  region   Region? @relation(fields: [regionId], references: [id])
+
   teacherProfile    TeacherProfile?
   lessons           Lesson[]
   interests         UserInterest[]
+  hostedMeetings    Meeting[]          @relation("HostedMeetings")
+  participations    Participation[]
   enrollments       Enrollment[]
   notificationsRec  Notification[]     @relation("Receiver")
   notificationsSend Notification[]     @relation("Sender")
   reviews           Review[]
   wishlists         Wishlist[]
-  comments          Comment[]
   payments          Payment[]
   pointTransactions PointTransaction[]
   userCoupons       UserCoupon[]
-  sentMessages      ChatMessage[]
-  studentChats      DirectChat[]       @relation("StudentChats")
-  teacherChats      DirectChat[]       @relation("TeacherChats")
 
   @@map("users")
 }
 
 model Region {
   id      Int      @id @default(autoincrement())
-  name    String   @unique // 최대 5글자
+  name    String   @unique
   users   User[]
   lessons Lesson[]
 
   @@map("regions")
 }
 
-model Category {
-  id            Int           @id @default(autoincrement())
-  name          String        @unique
-  subCategories SubCategory[]
+model LessonCategory {
+  id            Int                 @id @default(autoincrement())
+  name          String              @unique
+  subCategories LessonSubCategory[]
   lessons       Lesson[]
+  userInterests UserInterest[]
 
-  @@map("categories")
+  @@map("lesson_categories")
 }
 
-model SubCategory {
-  id         Int      @id @default(autoincrement())
-  categoryId Int      @map("category_id")
+model LessonSubCategory {
+  id         Int    @id @default(autoincrement())
+  categoryId Int    @map("category_id")
   name       String
-  category   Category @relation(fields: [categoryId], references: [id])
 
-  userInterests UserInterest[]
-  lessons       LessonSubCategory[]
+  category LessonCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@map("sub_categories")
+  lessons LessonSubCategoryMap[]
+
+  @@map("lesson_sub_categories")
+}
+
+model MeetingCategory {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  meetings Meeting[]
+
+  @@map("meeting_categories")
 }
 
 model UserInterest {
-  id            Int      @id @default(autoincrement())
-  userId        Int      @map("user_id")
-  subCategoryId Int      @map("sub_category_id")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  lessonCategoryId Int      @map("lesson_category_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  user        User        @relation(fields: [userId], references: [id])
-  subCategory SubCategory @relation(fields: [subCategoryId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+  lessonCategory LessonCategory @relation(fields: [lessonCategoryId], references: [id])
 
-  @@unique([userId, subCategoryId])
+  @@unique([userId, lessonCategoryId])
   @@map("user_interests")
 }
 
 model TeacherProfile {
   id           Int      @id @default(autoincrement())
   userId       Int      @unique @map("user_id")
-  nickname     String   @unique
-  introduction String   // 40~600자
+  nickname     String   @unique @map("nickname")
+  image        String
+  introduction String   @db.Text
   createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   user   User                  @relation(fields: [userId], references: [id])
   images TeacherProfileImage[]
@@ -156,68 +177,117 @@ model TeacherProfileImage {
   @@map("teacher_profile_images")
 }
 
+model Meeting {
+  id                  Int      @id @default(autoincrement())
+  title               String   @db.VarChar(100)
+  description         String   @db.VarChar(4000)
+  currentParticipants Int      @default(1) @map("current_participants")
+  maxParticipants     Int      @map("max_participants")
+  meetingDate         DateTime @map("meeting_date")
+  image               String?
+  categoryId          Int      @map("category_id")
+  address             String   @db.Text
+  latitude            Float
+  longitude           Float
+  meetingDeleted      Boolean  @default(false) @map("meeting_deleted")
+  hostId              Int      @map("host_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+
+  host           User            @relation("HostedMeetings", fields: [hostId], references: [id], onDelete: Cascade)
+  category       MeetingCategory @relation(fields: [categoryId], references: [id])
+  participations Participation[]
+  notifications  Notification[]
+
+  @@map("meetings")
+}
+
+model Participation {
+  id        Int                 @id @default(autoincrement())
+  userId    Int                 @map("user_id")
+  meetingId Int                 @map("meeting_id")
+  status    ParticipationStatus @default(PENDING)
+  checkedIn Attendance          @default(PENDING) @map("checked_in")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, meetingId])
+  @@map("participations")
+}
+
 model Lesson {
-  id                  Int          @id @default(autoincrement())
-  teacherId           Int          @map("teacher_id")
-  largeCategoryId     Int          @map("large_category_id")
-  title               String       @db.VarChar(50)
-  description         String       @db.Text
-  level               Level
-  durationMin         Int          @map("duration_min")
-  curriculum          String       @db.Text
+  id               Int    @id @default(autoincrement())
+  teacherId        Int    @map("teacher_id")
+  lessonCategoryId Int    @map("lesson_category_id")
+  title            String @db.VarChar(50)
+  description      String @db.Text
+  level            Level
+  durationMin      Int    @map("duration_min")
+  curriculum       String @db.Text
 
-  price               Int?         @default(0)
-  discountRate        Int?         @default(0) @map("discount_rate")
-  discountedPrice     Int?         @map("discounted_price")
+  status          LessonStatus @default(ACTIVE)
+  price           Int          @default(0)
+  discountRate    Int          @default(0) @map("discount_rate")
+  discountedPrice Int          @default(0) @map("discounted_price")
 
-  maxParticipants     Int?         @map("max_participants")
-  currentParticipants Int          @default(0) @map("current_participants")
-  representativeImage String?      @map("representative_image")
-  
-  regionId       Int?    @map("region_id")
-  address        String?
-  latitude       Float?
-  longitude      Float?
-  detailAddress  String? @map("detail_address")
-  directionsText String? @map("directions_text")
+  maxParticipants     Int?   @map("max_participants")
+  representativeImage String @map("representative_image")
+  likes               Int    @default(0)
 
-  weekdayOpen   String? @map("weekday_open")
-  weekdayClose  String? @map("weekday_close")
-  satOpen       String? @map("sat_open")
-  satClose      String? @map("sat_close")
-  sunOpen       String? @map("sun_open")
-  sunClose      String? @map("sun_close")
-  isSameDayReservable Boolean      @default(false) @map("is_same_day_reservable")
-  operationNote String? @map("operation_notes")
+  regionId       Int    @map("region_id")
+  address        String
+  latitude       Float
+  longitude      Float
+  detailAddress  String @map("detail_address")
+  directionsText String @map("directions_text")
 
-  status          LessonStatus @default(RECRUITING)
-  rate            Float        @default(0)
-  isDeleted       Boolean      @default(false) @map("is_deleted")
-  reviewAiSummary String?      @map("review_ai_summary")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
+  reservationLeadDays Int @default(0) @map("reservation_lead_days")
 
-  teacher       User                @relation(fields: [teacherId], references: [id])
-  category      Category            @relation(fields: [largeCategoryId], references: [id])
-  region        Region?             @relation(fields: [regionId], references: [id])
-  images        LessonImage[]
-  subCategories LessonSubCategory[]
-  schedules     LessonSchedule[]
-  enrollments   Enrollment[]
-  notifications Notification[]
-  reviews       Review[]
-  wishlists     Wishlist[]
-  comments      Comment[]
-  payments      Payment[]
-  chats         DirectChat[]
+  rate            Float     @default(0)
+  deletedAt       DateTime? @map("deleted_at")
+  reviewAiSummary String?   @map("review_ai_summary")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  teacher        User             @relation(fields: [teacherId], references: [id])
+  lessonCategory LessonCategory   @relation(fields: [lessonCategoryId], references: [id])
+  region         Region           @relation(fields: [regionId], references: [id])
+  images         LessonImage[]
+  schedules      LessonSchedule[]
+  notifications  Notification[]
+  reviews        Review[]
+  wishlists      Wishlist[]
+  payments       Payment[]
+
+  subCategories LessonSubCategoryMap[]
 
   @@map("lessons")
+}
+
+model LessonSchedule {
+  id                  Int                  @id @default(autoincrement())
+  lessonId            Int                  @map("lesson_id")
+  startAt             DateTime             @map("start_at")
+  endAt               DateTime             @map("end_at")
+  currentParticipants Int                  @default(0) @map("current_participants")
+  status              LessonScheduleStatus @default(RECRUITING)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at")
+
+  lesson      Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+
+  @@unique([lessonId, startAt, endAt])
+  @@map("lesson_schedules")
 }
 
 model LessonImage {
   id       Int    @id @default(autoincrement())
   lessonId Int    @map("lesson_id")
-  imageUrl String @map("image_url")
+  image    String @map("image")
   sequence Int
 
   lesson Lesson @relation(fields: [lessonId], references: [id])
@@ -225,75 +295,65 @@ model LessonImage {
   @@map("lesson_images")
 }
 
-model LessonSubCategory {
+model LessonSubCategoryMap {
   id            Int @id @default(autoincrement())
   lessonId      Int @map("lesson_id")
   subCategoryId Int @map("sub_category_id")
 
-  lesson      Lesson      @relation(fields: [lessonId], references: [id])
-  subCategory SubCategory @relation(fields: [subCategoryId], references: [id])
+  lesson      Lesson            @relation(fields: [lessonId], references: [id])
+  subCategory LessonSubCategory @relation(fields: [subCategoryId], references: [id])
 
   @@unique([lessonId, subCategoryId])
-  @@map("lesson_sub_category_maps")
-}
-
-model LessonSchedule {
-  id       Int      @id @default(autoincrement())
-  lessonId Int      @map("lesson_id")
-  startAt  DateTime @map("start_at")
-  endAt    DateTime @map("end_at")
-  sequence Int
-
-  lesson Lesson @relation(fields: [lessonId], references: [id])
-
-  @@map("lesson_schedules")
+  @@map("lesson_sub_categories_map")
 }
 
 model Enrollment {
-  id        Int                 @id @default(autoincrement())
-  userId    Int                 @map("user_id")
-  lessonId  Int                 @map("lesson_id")
-  paymentId Int?                @unique @map("payment_id")
-  status    ParticipationStatus @default(PENDING)
-  checkedIn Attendance?         @map("checked_in")
-  createdAt DateTime            @default(now()) @map("created_at")
-  updatedAt DateTime            @updatedAt @map("updated_at")
+  id         Int                 @id @default(autoincrement())
+  userId     Int                 @map("user_id")
+  scheduleId Int                 @map("schedule_id")
+  paymentId  Int?                @unique @map("payment_id")
+  status     ParticipationStatus @default(PENDING)
+  checkedIn  Attendance          @default(PENDING) @map("checked_in")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @default(now()) @updatedAt @map("updated_at")
 
-  user    User     @relation(fields: [userId], references: [id])
-  lesson  Lesson   @relation(fields: [lessonId], references: [id])
-  payment Payment? @relation(fields: [paymentId], references: [id])
+  user     User           @relation(fields: [userId], references: [id])
+  schedule LessonSchedule @relation(fields: [scheduleId], references: [id])
+  payment  Payment?       @relation("EnrollmentPayment", fields: [paymentId], references: [id])
 
-  @@unique([userId, lessonId])
+  @@unique([userId, scheduleId])
   @@map("enrollments")
 }
 
 model Notification {
-  id         Int              @id @default(autoincrement())
-  lessonId   Int?             @map("lesson_id")
-  receiverId Int              @map("receiver_id")
-  senderId   Int?             @map("sender_id")
-  targetId   Int?             @map("target_id")
-  targetType TargetType?      @map("target_type")
-  type       NotificationType
-  isRead     Boolean          @default(false) @map("is_read")
-  createdAt  DateTime         @default(now()) @map("created_at")
-  readAt     DateTime?        @map("read_at")
+  id         Int  @id @default(autoincrement())
+  lessonId   Int? @map("lesson_id")
+  meetingId  Int? @map("meeting_id")
+  receiverId Int  @map("receiver_id")
+  senderId   Int? @map("sender_id")
 
-  lesson   Lesson? @relation(fields: [lessonId], references: [id])
-  receiver User    @relation("Receiver", fields: [receiverId], references: [id])
-  sender   User?   @relation("Sender", fields: [senderId], references: [id])
+  type      NotificationType
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  readAt    DateTime?        @map("read_at")
+
+  lesson   Lesson?  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  meeting  Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  receiver User     @relation("Receiver", fields: [receiverId], references: [id])
+  sender   User?    @relation("Sender", fields: [senderId], references: [id])
 
   @@map("notifications")
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  lessonId  Int      @map("lesson_id")
-  rating    Int
-  content   String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                  Int      @id @default(autoincrement())
+  userId              Int      @map("user_id")
+  lessonId            Int      @map("lesson_id")
+  representativeImage String?  @map("representative_image")
+  rating              Int
+  content             String
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
 
   user   User          @relation(fields: [userId], references: [id])
   lesson Lesson        @relation(fields: [lessonId], references: [id])
@@ -305,12 +365,12 @@ model Review {
 model ReviewImage {
   id       Int    @id @default(autoincrement())
   reviewId Int    @map("review_id")
-  imageUrl String @map("image_url")
+  image    String @map("image")
   sequence Int
 
   review Review @relation(fields: [reviewId], references: [id])
 
-  @@map("reviews_images")
+  @@map("review_images")
 }
 
 model Wishlist {
@@ -322,24 +382,8 @@ model Wishlist {
   user   User   @relation(fields: [userId], references: [id])
   lesson Lesson @relation(fields: [lessonId], references: [id])
 
+  @@unique([userId, lessonId])
   @@map("wishlists")
-}
-
-model Comment {
-  id        Int      @id @default(autoincrement())
-  lessonId  Int      @map("lesson_id")
-  userId    Int      @map("user_id")
-  parentId  Int?     @map("parent_id")
-  content   String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  lesson  Lesson    @relation(fields: [lessonId], references: [id])
-  user    User      @relation(fields: [userId], references: [id])
-  parent  Comment?  @relation("Reply", fields: [parentId], references: [id])
-  replies Comment[] @relation("Reply")
-
-  @@map("comments")
 }
 
 model Payment {
@@ -347,15 +391,15 @@ model Payment {
   userId    Int      @map("user_id")
   lessonId  Int      @map("lesson_id")
   amount    Int
-  status    String   
-  method    String   
+  status    String
+  method    String
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   user              User               @relation(fields: [userId], references: [id])
   lesson            Lesson             @relation(fields: [lessonId], references: [id])
-  enrollment        Enrollment?
   pointTransactions PointTransaction[]
+  enrollment        Enrollment?        @relation("EnrollmentPayment")
 
   @@map("payments")
 }
@@ -365,11 +409,11 @@ model PointTransaction {
   userId    Int      @map("user_id")
   paymentId Int?     @map("payment_id")
   couponId  Int?     @map("coupon_id")
-  amount    Int      
-  type      String   
+  amount    Int
+  type      String
   createdAt DateTime @default(now()) @map("created_at")
 
-  user    User    @relation(fields: [userId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
   payment Payment? @relation(fields: [paymentId], references: [id])
   coupon  Coupon?  @relation(fields: [couponId], references: [id])
 
@@ -380,14 +424,14 @@ model Coupon {
   id            Int      @id @default(autoincrement())
   code          String   @unique
   description   String?
-  discountType  String   @map("discount_type") 
+  discountType  String   @map("discount_type")
   discountValue Int      @map("discount_value")
   maxUsage      Int      @map("max_usage")
   currentUsage  Int      @default(0) @map("current_usage")
   validFrom     DateTime @map("valid_from")
   validUntil    DateTime @map("valid_until")
   createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
 
   userCoupons       UserCoupon[]
   pointTransactions PointTransaction[]
@@ -396,44 +440,15 @@ model Coupon {
 }
 
 model UserCoupon {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @map("user_id")
-  couponId  Int       @map("coupon_id")
-  isUsed    Boolean   @default(false) @map("is_used")
-  usedAt    DateTime? @map("used_at")
-  issuedAt  DateTime  @default(now()) @map("issued_at")
+  id       Int       @id @default(autoincrement())
+  userId   Int       @map("user_id")
+  couponId Int       @map("coupon_id")
+  isUsed   Boolean   @default(false) @map("is_used")
+  usedAt   DateTime? @map("used_at")
+  issuedAt DateTime  @default(now()) @map("issued_at")
 
   user   User   @relation(fields: [userId], references: [id])
   coupon Coupon @relation(fields: [couponId], references: [id])
 
   @@map("user_coupons")
-}
-
-model DirectChat {
-  id        Int      @id @default(autoincrement())
-  studentId Int      @map("student_id")
-  teacherId Int      @map("teacher_id")
-  lessonId  Int      @map("lesson_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  student  User          @relation("StudentChats", fields: [studentId], references: [id])
-  teacher  User          @relation("TeacherChats", fields: [teacherId], references: [id])
-  lesson   Lesson        @relation(fields: [lessonId], references: [id])
-  messages ChatMessage[]
-
-  @@map("direct_chats")
-}
-
-model ChatMessage {
-  id           Int      @id @default(autoincrement())
-  directChatId Int      @map("direct_chat_id")
-  senderId     Int      @map("sender_id")
-  content      String
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  chat   DirectChat @relation(fields: [directChatId], references: [id])
-  sender User       @relation(fields: [senderId], references: [id])
-
-  @@map("chat_messages")
 }
