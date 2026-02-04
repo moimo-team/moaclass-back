@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CategoryItemDto } from './dto/category-item.dto';
 
@@ -9,5 +9,12 @@ export class CategoriesController {
   @Get()
   async findAll(): Promise<CategoryItemDto[]> {
     return this.categoriesService.findAll();
+  }
+
+  @Get(':lessonCategoryId')
+  async findSubCategories(
+    @Param('lessonCategoryId', ParseIntPipe) lessonCategoryId: number,
+  ): Promise<CategoryItemDto[]> {
+    return this.categoriesService.findSubCategories(lessonCategoryId);
   }
 }
