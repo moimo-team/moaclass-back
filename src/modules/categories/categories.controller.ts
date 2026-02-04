@@ -1,6 +1,6 @@
 import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
-import { CategoryItemDto } from './dto/category-item.dto';
+import { CategoryItemDto } from '../common/dto/category-item.dto';
 
 @Controller('lesson-categories')
 export class CategoriesController {

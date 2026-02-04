@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CategoryItemDto } from './dto/category-item.dto';
+import { CategoryItemDto } from '../common/dto/category-item.dto';
 
 @Injectable()
 export class CategoriesService {

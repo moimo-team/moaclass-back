@@ -9,6 +9,7 @@ import { InterestsModule } from './modules/interests/interests.module';
 import { ChatsModule } from './modules/chats/chats.module';
 import { NotificationsModule } from './modules/notification/notifications.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { RegionsModule } from './modules/regions/regions.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
     ChatsModule,
     NotificationsModule,
     CategoriesModule,
+    RegionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
