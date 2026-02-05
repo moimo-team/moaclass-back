@@ -20,6 +20,12 @@ import type { Bucket, File } from '@google-cloud/storage';
 import { MailsService } from '../mails/mails.service';
 import { UploadService } from '../upload/upload.service';
 
+type UserResponse = {
+  email: string;
+  nickname: string | null;
+  isNewUser: boolean;
+};
+
 interface GoogleTokenResponse {
   access_token: string;
   expires_in: number;
@@ -83,59 +89,61 @@ export class UsersService {
     private uploadService: UploadService,
   ) {}
 
-  // async registerUser(
-  //   nickname: string,
-  //   email: string,
-  //   password: string,
-  // ): Promise<{ accessToken: string; refreshToken: string; user: any }> {
-  //   try {
-  //     const checkEmail = await this.isEmailAvailable(email);
-  //     if (!checkEmail) {
-  //       throw new ConflictException('이미 존재하는 이메일입니다.');
-  //     }
+  async registerUser(
+    nickname: string,
+    email: string,
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: UserResponse;
+  }> {
+    try {
+      const checkEmail = await this.isEmailAvailable(email);
+      if (!checkEmail) {
+        throw new ConflictException('이미 존재하는 이메일입니다.');
+      }
 
-  //     const checkNickname = await this.isNicknameAvailable(nickname);
-  //     if (!checkNickname) {
-  //       throw new ConflictException('이미 존재하는 닉네임입니다.');
-  //     }
+      const checkNickname = await this.isNicknameAvailable(nickname);
+      if (!checkNickname) {
+        throw new ConflictException('이미 존재하는 닉네임입니다.');
+      }
 
-  //     const hashedPassword: string = await bcrypt.hash(password, 10);
+      const created = await this.prisma.user.create({
+        data: {
+          email,
+          nickname,
+          provider: 'KAKAO',
+          providerId: '12345',
+        },
+      });
 
-  //     const created = await this.prisma.user.create({
-  //       data: {
-  //         email,
-  //         password: hashedPassword,
-  //         nickname,
-  //       },
-  //     });
+      // 🔹 회원가입 직후 토큰 발급
+      const refreshToken = await this.issueOrRefreshToken(created);
+      const accessToken = this.issueAccessToken(created);
 
-  //     // 🔹 회원가입 직후 토큰 발급
-  //     const refreshToken = await this.issueOrRefreshToken(created);
-  //     const accessToken = this.issueAccessToken(created);
-
-  //     return {
-  //       accessToken,
-  //       refreshToken,
-  //       user: {
-  //         isNewUser: !created.bio,
-  //         email: created.email,
-  //         nickname: created.nickname,
-  //       },
-  //     };
-  //   } catch (err: unknown) {
-  //     if (err instanceof ConflictException) {
-  //       throw err;
-  //     }
-  //     if (err instanceof Error) {
-  //       console.error('회원가입 에러:', err.message);
-  //     } else {
-  //       console.error('회원가입 에러: 알 수 없는 타입', err);
-  //     }
-  //     throw new InternalServerErrorException(
-  //       '회원가입 처리 중 오류가 발생했습니다.',
-  //     );
-  //   }
-  // }
+      return {
+        accessToken,
+        refreshToken,
+        user: {
+          isNewUser: !created.bio,
+          email: created.email,
+          nickname: created.nickname,
+        },
+      };
+    } catch (err: unknown) {
+      if (err instanceof ConflictException) {
+        throw err;
+      }
+      if (err instanceof Error) {
+        console.error('회원가입 에러:', err.message);
+      } else {
+        console.error('회원가입 에러: 알 수 없는 타입', err);
+      }
+      throw new InternalServerErrorException(
+        '회원가입 처리 중 오류가 발생했습니다.',
+      );
+    }
+  }
 
   async findAll(): Promise<User[]> {
     return await this.prisma.user.findMany();
@@ -185,7 +193,7 @@ export class UsersService {
           data: {
             email,
             nickname: name,
-            provider: 'google',
+            provider: 'GOOGLE',
             providerId: googleSubId,
             image: picture, // 구글 프로필 이미지 저장 가능
           },
@@ -227,8 +235,7 @@ export class UsersService {
         {
           params: {
             grant_type: 'authorization_code',
-            client_id: process.env.KAKAO_CLIENT_ID,
-            client_secret: process.env.KAKAO_CLIENT_SECRET,
+            client_id: process.env.KAKAO_REST_API_KEY,
             redirect_uri: redirectUri,
             code,
           },
@@ -265,7 +272,7 @@ export class UsersService {
           data: {
             email,
             nickname,
-            provider: 'kakao',
+            provider: 'KAKAO',
             providerId: kakaoSubId,
             image: picture,
           },
@@ -320,98 +327,104 @@ export class UsersService {
   //   };
   // }
 
-  // async updateUser(
-  //   userId: number,
-  //   dto: UpdateExtraInfoDto,
-  //   file?: Express.Multer.File,
-  // ) {
-  //   if (!userId) throw new Error('User ID is missing');
+  async updateUser(
+    userId: number,
+    dto: UpdateExtraInfoDto,
+    file?: Express.Multer.File,
+  ) {
+    if (!userId) throw new Error('User ID is missing');
 
-  //   if (dto.nickname) {
-  //     const exists = await this.prisma.user.findFirst({
-  //       where: { nickname: dto.nickname, id: { not: userId } },
-  //       select: { id: true },
-  //     });
-  //     if (exists) throw new ConflictException('Nickname already in use');
-  //   }
+    // 닉네임 중복 체크
+    if (dto.nickname) {
+      const exists = await this.prisma.user.findFirst({
+        where: { nickname: dto.nickname, id: { not: userId } },
+        select: { id: true },
+      });
+      if (exists) throw new ConflictException('Nickname already in use');
+    }
 
-  //   let imageUrl: string | undefined;
-  //   console.log(file);
+    let imageUrl: string | undefined;
+    if (file) {
+      imageUrl = await this.uploadService.uploadFile('profile', file);
+    }
 
-  //   if (file) {
-  //     imageUrl = await this.uploadService.uploadFile('profile', file);
-  //   }
+    // 기본 유저 정보 업데이트
+    const userBaseUpdate = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        nickname: dto.nickname,
+        bio: dto.bio,
+        ...(imageUrl ? { image: imageUrl } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        nickname: true,
+        bio: true,
+        image: true,
+      },
+    });
 
-  //   const userBaseUpdate = await this.prisma.user.update({
-  //     where: { id: userId },
-  //     data: {
-  //       nickname: dto.nickname,
-  //       bio: dto.bio,
-  //       ...(imageUrl ? { image: imageUrl } : {}),
-  //     },
-  //     select: {
-  //       id: true,
-  //       email: true,
-  //       nickname: true,
-  //       bio: true,
-  //       image: true,
-  //     },
-  //   });
+    // 관심사 업데이트 (LessonCategory 기반)
+    if (dto.interests && dto.interests.length > 0) {
+      // 유효한 LessonCategory만 필터링
+      const validCategories = await this.prisma.lessonCategory.findMany({
+        where: { id: { in: dto.interests } },
+        select: { id: true },
+      });
+      const validIds = new Set(validCategories.map((c) => c.id));
 
-  //   if (dto.interests && dto.interests.length > 0) {
-  //     const validInterests = await this.prisma.interest.findMany({
-  //       where: { id: { in: dto.interests } },
-  //       select: { id: true },
-  //     });
-  //     const validIds = new Set(validInterests.map((i) => i.id));
+      // 현재 유저 관심사 조회
+      const currentLinks = await this.prisma.userInterest.findMany({
+        where: { userId },
+        select: { id: true, lessonCategoryId: true },
+      });
 
-  //     const currentLinks = await this.prisma.userInterest.findMany({
-  //       where: { userId },
-  //       select: { id: true, interestId: true },
-  //     });
+      const desired = Array.from(validIds);
 
-  //     const desired = Array.from(validIds);
+      // 삭제할 관심사
+      const toDelete = currentLinks
+        .filter((link) => !validIds.has(link.lessonCategoryId))
+        .map((link) => link.id);
 
-  //     const toDelete = currentLinks
-  //       .filter((link) => !validIds.has(link.interestId))
-  //       .map((link) => link.id);
+      // 추가할 관심사
+      const currentIds = new Set(currentLinks.map((l) => l.lessonCategoryId));
+      const toAdd = desired.filter((id) => !currentIds.has(id));
 
-  //     const currentIds = new Set(currentLinks.map((l) => l.interestId));
-  //     const toAdd = desired.filter((id) => !currentIds.has(id));
+      await this.prisma.$transaction([
+        ...(toDelete.length
+          ? [
+              this.prisma.userInterest.deleteMany({
+                where: { id: { in: toDelete } },
+              }),
+            ]
+          : []),
+        ...toAdd.map((lessonCategoryId) =>
+          this.prisma.userInterest.create({
+            data: { userId, lessonCategoryId },
+          }),
+        ),
+      ]);
+    }
 
-  //     await this.prisma.$transaction([
-  //       ...(toDelete.length
-  //         ? [
-  //             this.prisma.userInterest.deleteMany({
-  //               where: { id: { in: toDelete } },
-  //             }),
-  //           ]
-  //         : []),
-  //       ...toAdd.map((interestId) =>
-  //         this.prisma.userInterest.create({
-  //           data: { userId, interestId },
-  //         }),
-  //       ),
-  //     ]);
-  //   }
+    // 최신 관심사 조회
+    const interests = await this.prisma.userInterest.findMany({
+      where: { userId },
+      include: { lessonCategory: true },
+    });
 
-  //   const interests = await this.prisma.userInterest.findMany({
-  //     where: { userId },
-  //     include: { interest: true },
-  //   });
-
-  //   return {
-  //     id: userBaseUpdate.id,
-  //     email: userBaseUpdate.email,
-  //     nickname: userBaseUpdate.nickname,
-  //     bio: userBaseUpdate.bio,
-  //     image: userBaseUpdate.image,
-  //     interests: interests.map((i) => ({
-  //       id: i.interestId,
-  //       name: i.interest.name,
-  //     })),
-  //   };
-  // }
+    return {
+      id: userBaseUpdate.id,
+      email: userBaseUpdate.email,
+      nickname: userBaseUpdate.nickname,
+      bio: userBaseUpdate.bio,
+      image: userBaseUpdate.image,
+      interests: interests.map((i) => ({
+        id: i.lessonCategory.id,
+        name: i.lessonCategory.name,
+      })),
+    };
+  }
 
   // async findById(userId: number) {
   //   const user = await this.prisma.user.findUnique({
@@ -437,69 +450,69 @@ export class UsersService {
   //   };
   // }
 
-  // async isNicknameAvailable(nickname: string): Promise<boolean> {
-  //   const existing = await this.prisma.user.findUnique({
-  //     where: { nickname },
-  //   });
+  async isNicknameAvailable(nickname: string): Promise<boolean> {
+    const existing = await this.prisma.user.findUnique({
+      where: { nickname },
+    });
 
-  //   return !existing;
-  // }
+    return !existing;
+  }
 
-  // async isEmailAvailable(email: string): Promise<boolean> {
-  //   const existing = await this.prisma.user.findFirst({
-  //     where: { email },
-  //   });
+  async isEmailAvailable(email: string): Promise<boolean> {
+    const existing = await this.prisma.user.findFirst({
+      where: { email },
+    });
 
-  //   return !existing;
-  // }
+    return !existing;
+  }
 
-  // async refreshAccessToken(refreshToken: string) {
-  //   try {
-  //     const { email } = this.jwtService.verify<JwtPayload>(refreshToken, {
-  //       secret: process.env.JWT_SECRET,
-  //     });
+  async refreshAccessToken(refreshToken: string) {
+    try {
+      const { email } = this.jwtService.verify<JwtPayload>(refreshToken, {
+        secret: process.env.JWT_SECRET,
+      });
 
-  //     const user = await this.prisma.user.findUnique({
-  //       where: { email },
-  //     });
-  //     if (!user || user.refreshToken !== refreshToken) {
-  //       throw new UnauthorizedException('유효하지 않은 Refresh 토큰입니다.');
-  //     }
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
+      if (!user || user.refreshToken !== refreshToken) {
+        throw new UnauthorizedException('유효하지 않은 Refresh 토큰입니다.');
+      }
 
-  //     const newAccessToken = this.jwtService.sign(
-  //       { id: user.id, email: user.email },
-  //       { secret: process.env.JWT_SECRET, expiresIn: '1h' },
-  //     );
+      const newAccessToken = this.jwtService.sign(
+        { id: user.id, email: user.email },
+        { secret: process.env.JWT_SECRET, expiresIn: '1h' },
+      );
 
-  //     return { accessToken: newAccessToken, refreshToken };
-  //   } catch (err) {
-  //     if (err instanceof TokenExpiredError) {
-  //       const decoded = this.jwtService.decode<JwtPayload | null>(refreshToken);
-  //       if (!decoded || typeof decoded === 'string') {
-  //         throw new UnauthorizedException('Refresh token decode 실패');
-  //       }
-  //       const { id, email } = decoded;
-  //       const newRefreshToken = this.jwtService.sign(
-  //         { id, email },
-  //         { secret: process.env.JWT_SECRET, expiresIn: '7d' },
-  //       );
+      return { accessToken: newAccessToken, refreshToken };
+    } catch (err) {
+      if (err instanceof TokenExpiredError) {
+        const decoded = this.jwtService.decode<JwtPayload | null>(refreshToken);
+        if (!decoded || typeof decoded === 'string') {
+          throw new UnauthorizedException('Refresh token decode 실패');
+        }
+        const { id, email } = decoded;
+        const newRefreshToken = this.jwtService.sign(
+          { id, email },
+          { secret: process.env.JWT_SECRET, expiresIn: '7d' },
+        );
 
-  //       await this.prisma.user.update({
-  //         where: { id },
-  //         data: { refreshToken: newRefreshToken },
-  //       });
+        await this.prisma.user.update({
+          where: { id },
+          data: { refreshToken: newRefreshToken },
+        });
 
-  //       const newAccessToken = this.jwtService.sign(
-  //         { id, email },
-  //         { secret: process.env.JWT_SECRET, expiresIn: '1h' },
-  //       );
+        const newAccessToken = this.jwtService.sign(
+          { id, email },
+          { secret: process.env.JWT_SECRET, expiresIn: '7d' },
+        );
 
-  //       return { accessToken: newAccessToken, refreshToken: newRefreshToken };
-  //     }
+        return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+      }
 
-  //     throw new UnauthorizedException('Refresh 토큰 검증 실패');
-  //   }
-  // }
+      throw new UnauthorizedException('Refresh 토큰 검증 실패');
+    }
+  }
 
   // async requestPasswordReset(email: string) {
   //   const user: User | null = await this.prisma.user.findUnique({
@@ -605,55 +618,49 @@ export class UsersService {
   //   return;
   // }
 
-  // generateAccessToken(payload: any) {
-  //   return this.jwtService.sign(payload, {
-  //     secret: process.env.JWT_SECRET,
-  //     expiresIn: '15m', // accessToken은 짧게
-  //   });
-  // }
+  async verifyUser(id: number) {
+    console.log(id);
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+    console.log(user, '유저');
 
-  // generateRefreshToken(payload: any) {
-  //   return this.jwtService.sign(payload, {
-  //     secret: process.env.JWT_SECRET,
-  //     expiresIn: '7d', // refreshToken은 길게
-  //   });
-  // }
+    if (!user) {
+      return {
+        authenticated: false,
+      };
+    }
 
-  // async verifyUser(id: number) {
-  //   console.log(id);
-  //   const user = await this.prisma.user.findUnique({
-  //     where: { id },
-  //   });
-  //   console.log(user, '유저');
+    //interests 이름이 맞는가?
+    const currentLinks: { lessonCategory: { id: number; name: string } }[] =
+      await this.prisma.userInterest.findMany({
+        where: { userId: id },
+        select: {
+          lessonCategory: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
 
-  //   if (!user) {
-  //     return {
-  //       authenticated: false,
-  //     };
-  //   }
-  //   const currentLinks = await this.prisma.userInterest.findMany({
-  //     where: { userId: id },
-  //     select: { interestId: true },
-  //   });
-  //   const currentIds = currentLinks.map((l) => l.interestId);
-  //   // interest 테이블에서 조회
-  //   const interests = await this.prisma.interest.findMany({
-  //     where: {
-  //       id: { in: currentIds },
-  //     },
-  //   });
+    const interests = currentLinks.map((link) => ({
+      id: link.lessonCategory.id,
+      name: link.lessonCategory.name,
+    }));
 
-  //   return {
-  //     authenticated: true,
-  //     isNewUser: !user.bio,
-  //     id: user.id,
-  //     email: user.email,
-  //     nickname: user.nickname,
-  //     bio: user.bio,
-  //     profileImage: user.image,
-  //     interests,
-  //   };
-  // }
+    return {
+      authenticated: true,
+      isNewUser: !user.bio,
+      id: user.id,
+      email: user.email,
+      nickname: user.nickname,
+      bio: user.bio,
+      profileImage: user.image,
+      interests,
+    };
+  }
 
   private async issueOrRefreshToken(user: User): Promise<string> {
     let refreshToken = user.refreshToken;
@@ -692,7 +699,7 @@ export class UsersService {
   private issueAccessToken(user: User): string {
     return this.jwtService.sign(
       { id: user.id, email: user.email },
-      { secret: process.env.JWT_SECRET, expiresIn: '1h' },
+      { secret: process.env.JWT_SECRET, expiresIn: '7d' },
     );
   }
 }

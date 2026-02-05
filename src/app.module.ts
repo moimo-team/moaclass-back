@@ -4,7 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './modules/users/users.module';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { MeetingsModule } from './modules/meetings/meetings.module';
+// import { MeetingsModule } from './modules/meetings/meetings.module';
 import { InterestsModule } from './modules/interests/interests.module';
 import { ChatsModule } from './modules/chats/chats.module';
 import { NotificationsModule } from './modules/notification/notifications.module';
@@ -13,7 +13,7 @@ import { NotificationsModule } from './modules/notification/notifications.module
   imports: [
     PrismaModule,
     UsersModule,
-    MeetingsModule,
+    // MeetingsModule,
     AuthModule,
     InterestsModule,
     ChatsModule,
