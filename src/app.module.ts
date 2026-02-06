@@ -11,12 +11,13 @@ import { NotificationsModule } from './modules/notification/notifications.module
 import { CategoriesModule } from './modules/categories/categories.module';
 import { RegionsModule } from './modules/regions/regions.module';
 import { LessonsModule } from './modules/lessons/lessons.module';
+import { MomentoesModule } from './modules/momentoes/momentoes.module';
 
 @Module({
   imports: [
     PrismaModule,
     UsersModule,
-    // MeetingsModule,
+    //    MeetingsModule,
     AuthModule,
     InterestsModule,
     ChatsModule,
@@ -24,6 +25,7 @@ import { LessonsModule } from './modules/lessons/lessons.module';
     CategoriesModule,
     RegionsModule,
     LessonsModule,
+    MomentoesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
