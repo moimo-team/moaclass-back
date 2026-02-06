@@ -113,7 +113,7 @@ export class UsersService {
           email,
           nickname,
           provider: 'KAKAO',
-          providerId: '12345',
+          providerId: '123453123',
         },
       });
 
@@ -662,7 +662,7 @@ export class UsersService {
     };
   }
 
-  private async issueOrRefreshToken(user: User): Promise<string> {
+  async issueOrRefreshToken(user: User): Promise<string> {
     let refreshToken = user.refreshToken;
     if (!refreshToken) {
       refreshToken = this.jwtService.sign(
@@ -696,9 +696,16 @@ export class UsersService {
     return refreshToken;
   }
 
-  private issueAccessToken(user: User): string {
+  issueAccessToken(user: User): string {
     return this.jwtService.sign(
       { id: user.id, email: user.email },
+      { secret: process.env.JWT_SECRET, expiresIn: '7d' },
+    );
+  }
+
+  issueFakeToken(id: number, email: string): string {
+    return this.jwtService.sign(
+      { id, email },
       { secret: process.env.JWT_SECRET, expiresIn: '7d' },
     );
   }
