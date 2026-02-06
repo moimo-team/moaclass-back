@@ -180,6 +180,11 @@ export class UsersController {
     return;
   }
 
+  @Get('faketoken')
+  issueToken(@Body('id') id: number, @Body('email') email: string) {
+    const available = this.usersService.issueFakeToken(id, email);
+    return available;
+  }
   // @Post('check-email')
   // async checkEmail(@Body('email') email: string) {
   //   const available = await this.usersService.isEmailAvailable(email);

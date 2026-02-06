@@ -10,6 +10,7 @@ import { ChatsModule } from './modules/chats/chats.module';
 import { NotificationsModule } from './modules/notification/notifications.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { RegionsModule } from './modules/regions/regions.module';
+import { LessonsModule } from './modules/lessons/lessons.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RegionsModule } from './modules/regions/regions.module';
     NotificationsModule,
     CategoriesModule,
     RegionsModule,
+    LessonsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
