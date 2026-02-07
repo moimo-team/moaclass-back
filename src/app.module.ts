@@ -12,6 +12,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { RegionsModule } from './modules/regions/regions.module';
 import { LessonsModule } from './modules/lessons/lessons.module';
 import { MomentoesModule } from './modules/momentoes/momentoes.module';
+import { LikesModule } from './modules/likes/likes.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { MomentoesModule } from './modules/momentoes/momentoes.module';
     RegionsModule,
     LessonsModule,
     MomentoesModule,
+    LikesModule
   ],
   controllers: [AppController],
   providers: [AppService],
