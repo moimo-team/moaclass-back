@@ -214,6 +214,7 @@ export class UsersService {
         },
       };
     } catch (err: any) {
+      console.error(err);
       throw new InternalServerErrorException(`구글 로그인 실패: ${err}`);
     }
   }
@@ -356,25 +357,20 @@ export class UsersService {
         bio: dto.bio,
         ...(imageUrl ? { image: imageUrl } : {}),
       },
-      select: {
-        id: true,
-        email: true,
-        nickname: true,
-        bio: true,
-        image: true,
+      include: {
+        region: true,
+        teacherProfile: true,
       },
     });
 
     // 관심사 업데이트 (LessonCategory 기반)
     if (dto.interests && dto.interests.length > 0) {
-      // 유효한 LessonCategory만 필터링
       const validCategories = await this.prisma.lessonCategory.findMany({
         where: { id: { in: dto.interests } },
         select: { id: true },
       });
       const validIds = new Set(validCategories.map((c) => c.id));
 
-      // 현재 유저 관심사 조회
       const currentLinks = await this.prisma.userInterest.findMany({
         where: { userId },
         select: { id: true, lessonCategoryId: true },
@@ -382,12 +378,10 @@ export class UsersService {
 
       const desired = Array.from(validIds);
 
-      // 삭제할 관심사
       const toDelete = currentLinks
         .filter((link) => !validIds.has(link.lessonCategoryId))
         .map((link) => link.id);
 
-      // 추가할 관심사
       const currentIds = new Set(currentLinks.map((l) => l.lessonCategoryId));
       const toAdd = desired.filter((id) => !currentIds.has(id));
 
@@ -423,6 +417,14 @@ export class UsersService {
         id: i.lessonCategory.id,
         name: i.lessonCategory.name,
       })),
+      point: userBaseUpdate.point,
+      region: userBaseUpdate.region
+        ? { id: userBaseUpdate.region.id, name: userBaseUpdate.region.name }
+        : null,
+      teacherProfile: !!userBaseUpdate.teacherProfile,
+      createdAt: userBaseUpdate.createdAt,
+      updatedAt: userBaseUpdate.updatedAt,
+      deletedAt: userBaseUpdate.deletedAt,
     };
   }
 
@@ -622,6 +624,10 @@ export class UsersService {
     console.log(id);
     const user = await this.prisma.user.findUnique({
       where: { id },
+      include: {
+        region: true,
+        teacherProfile: true,
+      },
     });
     console.log(user, '유저');
 
@@ -631,7 +637,7 @@ export class UsersService {
       };
     }
 
-    //interests 이름이 맞는가?
+    // interests
     const currentLinks: { lessonCategory: { id: number; name: string } }[] =
       await this.prisma.userInterest.findMany({
         where: { userId: id },
@@ -659,6 +665,14 @@ export class UsersService {
       bio: user.bio,
       profileImage: user.image,
       interests,
+      point: user.point,
+      region: user.region
+        ? { id: user.region.id, name: user.region.name }
+        : null,
+      teacherProfile: !!user.teacherProfile,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      deletedAt: user.deletedAt,
     };
   }
 
