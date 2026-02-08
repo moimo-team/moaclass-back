@@ -6,6 +6,7 @@ import { LessonSchedule, Level, Prisma } from '@prisma/client';
 import {
   LessonPageOptionsDto,
   LessonSort,
+  LessonDay,
 } from './dto/lesson-page-options.dto';
 
 @Injectable()
@@ -26,34 +27,29 @@ export class LessonsService {
   }
   // 클래스 목록 조회
   async getLessons(filters: LessonPageOptionsDto) {
-    return this.prisma.lesson.findMany({
+    let lessons = await this.prisma.lesson.findMany({
       where: {
-        ...(filters.level && { level: filters.level }),
         ...(filters.regionId && { regionId: filters.regionId }),
         ...(filters.categoryId && { lessonCategoryId: filters.categoryId }),
-        ...(filters.minPrice && { price: { gte: filters.minPrice } }),
-        ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
+        ...(filters.level && { level: filters.level }),
+        ...(filters.status && {
+          status: filters.status,
+        }),
         ...(filters.minParticipants && {
           maxParticipants: { gte: filters.minParticipants },
         }),
         ...(filters.maxParticipants && {
           maxParticipants: { lte: filters.maxParticipants },
         }),
-        ...(filters.timeRange && {
-          schedules: {
-            some: {
-              startAt: { gte: new Date(filters.timeRange.split('-')[0]) },
-              endAt: { lte: new Date(filters.timeRange.split('-')[1]) },
-            },
-          },
-        }),
+        ...(filters.minPrice && { price: { gte: filters.minPrice } }),
+        ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
       },
       orderBy: (() => {
         switch (filters.sort) {
           case LessonSort.PRICE_ASC:
-            return { price: 'asc' };
+            return { discountedPrice: 'asc' };
           case LessonSort.PRICE_DESC:
-            return { price: 'desc' };
+            return { discountedPrice: 'desc' };
           case LessonSort.DEADLINE:
             return { reservationLeadDays: 'asc' };
           case LessonSort.UPDATE:
@@ -66,19 +62,54 @@ export class LessonsService {
             return { createdAt: 'desc' };
         }
       })(),
-
       include: {
-        teacher: {
-          select: {
-            id: true,
-            nickname: true,
-          },
-        },
+        teacher: { select: { id: true, nickname: true } },
         lessonCategory: true,
         region: true,
         schedules: true,
       },
-    });
+    }); // 요일 + 시간 범위 필터링 (JS 레벨에서 처리)
+    if (filters.days?.length || filters.timeRange) {
+      // const [startHour, endHour] = filters.timeRange
+      //   ? filters.timeRange.split('-').map(Number)
+      //   : [undefined, undefined];
+
+      lessons = lessons.filter((lesson) =>
+        lesson.schedules.some((schedule) => {
+          const startDate = new Date(schedule.startAt);
+          const endDate = new Date(schedule.endAt);
+
+          const day = startDate.getDay(); // 0=일, 6=토
+          // const startHourOfLesson = startDate.getHours();
+          // const endHourOfLesson = endDate.getHours();
+
+          // 요일 필터
+          let dayMatch = true;
+          if (filters.days?.length) {
+            if (filters.days.includes(LessonDay.WEEKDAY)) {
+              dayMatch = day >= 1 && day <= 5;
+            } else if (filters.days.includes(LessonDay.SATURDAY)) {
+              dayMatch = day === 6;
+            } else if (filters.days.includes(LessonDay.WEEKEND)) {
+              dayMatch = day === 0 || day === 6;
+            }
+          }
+
+          // // 시간 범위 필터 (겹치는 시간대 포함)
+          // let timeMatch = true;
+          // if (startHour !== undefined && endHour !== undefined) {
+          //   timeMatch =
+          //     startHourOfLesson <= endHour && endHourOfLesson >= startHour;
+          //   console.log(startHourOfLesson, endHour, endHourOfLesson, startHour);
+          // }
+
+          // return dayMatch && timeMatch;
+          return dayMatch;
+        }),
+      );
+    }
+
+    return lessons;
   }
 
   // 클래스 상세 조회

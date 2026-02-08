@@ -8,7 +8,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PageOptionsDto } from '../../common/dto/page-options.dto';
-import { Level } from '@prisma/client';
+import { Level, LessonStatus } from '@prisma/client';
 
 export enum LessonSort {
   NEW = 'NEW', // 최신순
@@ -18,6 +18,12 @@ export enum LessonSort {
   PRICE_DESC = 'PRICE_DESC', // 가격 내림차순
   RATE = 'RATE', // 평점 높은순
   LIKES = 'LIKES', // 좋아요 많은순
+}
+
+export enum LessonDay {
+  WEEKDAY = 'WEEKDAY', // 월~금
+  SATURDAY = 'SATURDAY', // 토요일
+  WEEKEND = 'WEEKEND', // 토/일
 }
 
 export class LessonPageOptionsDto extends PageOptionsDto {
@@ -41,11 +47,11 @@ export class LessonPageOptionsDto extends PageOptionsDto {
   level?: Level;
 
   @IsOptional()
-  @IsArray()
+  @IsEnum(LessonDay, { each: true })
   @Transform(({ value }) =>
     Array.isArray(value) ? value : value ? [value] : [],
   )
-  days?: string[];
+  days?: LessonDay[];
 
   @IsOptional()
   @IsNumber()
@@ -72,8 +78,8 @@ export class LessonPageOptionsDto extends PageOptionsDto {
   maxPrice?: number;
 
   @IsOptional()
-  @IsString()
-  status?: string = 'all';
+  @IsEnum(LessonStatus)
+  status?: LessonStatus;
 
   @IsOptional()
   @Transform(({ value }) => value === 'true')
