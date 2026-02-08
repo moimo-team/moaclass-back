@@ -161,21 +161,10 @@ model TeacherProfile {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   user   User                  @relation(fields: [userId], references: [id])
-  images TeacherProfileImage[]
 
   @@map("teacher_profiles")
 }
 
-model TeacherProfileImage {
-  id        Int    @id @default(autoincrement())
-  profileId Int    @map("profile_id")
-  imageUrl  String @map("image_url")
-  sequence  Int
-
-  profile TeacherProfile @relation(fields: [profileId], references: [id])
-
-  @@map("teacher_profile_images")
-}
 
 model Meeting {
   id                  Int      @id @default(autoincrement())
