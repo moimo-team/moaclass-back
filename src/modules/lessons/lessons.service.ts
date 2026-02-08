@@ -1,29 +1,40 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service'; // PrismaService를 주입받는다고 가정
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
-import { LessonSchedule, Level, Prisma } from '@prisma/client';
+import { LessonSchedule, Prisma } from '@prisma/client';
 import {
   LessonPageOptionsDto,
   LessonSort,
   LessonDay,
 } from './dto/lesson-page-options.dto';
+import { UploadService } from '../upload/upload.service';
 
 @Injectable()
 export class LessonsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
+  ) {}
 
-  async createLesson(dto: CreateLessonDto) {
-    const { teacherId, lessonCategoryId, regionId, ...rest } = dto;
-
-    return await this.prisma.lesson.create({
-      data: {
-        teacher: { connect: { id: teacherId } },
-        lessonCategory: { connect: { id: lessonCategoryId } },
-        region: { connect: { id: regionId } },
-        ...rest, // 나머지 일반 필드들은 그대로 펼치기
-      },
-    });
+  async createLesson(dto: CreateLessonDto, file?: Express.Multer.File) {
+    let imageUrl: string | null = null;
+    if (file) {
+      imageUrl = await this.uploadService.uploadFile('lesson', file);
+      console.log('파일업로드');
+      return this.prisma.lesson.create({
+        data: {
+          ...dto,
+          status: dto.status ?? 'DRAFT',
+          representativeImage: imageUrl,
+        },
+      });
+    }
+    throw new BadRequestException('대표 이미지를 업로드해야 합니다.');
   }
   // 클래스 목록 조회
   async getLessons(filters: LessonPageOptionsDto) {
@@ -159,11 +170,21 @@ export class LessonsService {
   }
 
   // 클래스 수정
-  async updateLesson(lessonId: string, dto: UpdateLessonDto) {
+  async updateLesson(
+    lessonId: number,
+    dto: UpdateLessonDto,
+    file?: Express.Multer.File,
+  ) {
+    let imageUrl: string | undefined;
+    if (file) {
+      imageUrl = await this.uploadService.uploadFile('lesson', file);
+      console.log('파일업로드 완료');
+    }
     return this.prisma.lesson.update({
-      where: { id: Number(lessonId) },
+      where: { id: lessonId },
       data: {
         ...dto,
+        ...(imageUrl && { representativeImage: imageUrl }), // 파일이 있으면 교체, 없으면 기존 representativeImage 유지
       },
     });
   }

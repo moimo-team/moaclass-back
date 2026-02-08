@@ -27,7 +27,7 @@ import { LikesModule } from './modules/likes/likes.module';
     RegionsModule,
     LessonsModule,
     MomentoesModule,
-    LikesModule
+    LikesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
