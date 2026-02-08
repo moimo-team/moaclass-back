@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service'; // PrismaService를 주입받는다고 가정
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
@@ -114,17 +114,48 @@ export class LessonsService {
 
   // 클래스 상세 조회
   async getLessonDetail(lessonId: number) {
-    return this.prisma.lesson.findUnique({
+    const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
       include: {
+        teacher: { select: { id: true, nickname: true, image: true } },
         lessonCategory: true,
-        region: true,
-        teacher: true,
-        schedules: true,
-        images: true,
-        reviews: true,
+        region: true, // 커리큘럼은 Lesson 테이블의 curriculum 필드 그대로 가져옴
+        // 일정
+        schedules: {
+          select: {
+            id: true,
+            startAt: true,
+            endAt: true,
+            currentParticipants: true,
+            status: true,
+          },
+          orderBy: { startAt: 'asc' },
+        }, // 이미지
+        images: {
+          select: { id: true, image: true, sequence: true },
+          orderBy: { sequence: 'asc' },
+        }, // 리뷰
+        reviews: {
+          select: {
+            id: true,
+            rating: true,
+            content: true,
+            representativeImage: true,
+            createdAt: true,
+            user: { select: { id: true, nickname: true } },
+            images: {
+              select: { id: true, image: true, sequence: true },
+              orderBy: { sequence: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
+    if (!lesson) {
+      throw new NotFoundException(`Lesson with id ${lessonId} not found`);
+    }
+    return lesson;
   }
 
   // 클래스 수정
