@@ -8,12 +8,15 @@ import {
   HttpStatus,
   HttpException,
   Delete,
+  Get,
+  Query,
 } from '@nestjs/common';
 import * as express from 'express';
 import { LikesService } from './likes.service';
 import { CreateLikeDto } from './dto/create-like.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtPayload } from '../../auth/jwt-payload.interface';
+import { PageOptionsDto } from '../common/dto/page-options.dto';
 
 @Controller('likes')
 export class LikesController {
@@ -57,5 +60,15 @@ export class LikesController {
       }
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async findAllMe(
+    @Req() req: express.Request & { user: JwtPayload },
+    @Query() pageOptionsDto: PageOptionsDto,
+  ) {
+    const userId = req.user.id;
+    return this.likesService.findAll(userId, pageOptionsDto);
   }
 }

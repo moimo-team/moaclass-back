@@ -6,6 +6,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { PageMetaDto } from '../common/dto/page-meta.dto';
+import { PageDto } from '../common/dto/page.dto';
+import { PageOptionsDto } from '../common/dto/page-options.dto';
 
 @Injectable()
 export class LikesService {
@@ -22,18 +25,16 @@ export class LikesService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // 위시리스트 레코드 생성
         const wishlist = await tx.wishlist.create({
           data: {
             userId: userId,
             lessonId: lessonId,
           },
         });
-        // 레슨 테이블의 likes 컬럼 1 증가
         await tx.lesson.update({
           where: { id: lessonId },
           data: {
-            likes: { increment: 1 }, // Prisma의 원자적 연산 활용
+            likes: { increment: 1 },
           },
         });
 
@@ -54,7 +55,6 @@ export class LikesService {
   async remove(userId: number, lessonId: number) {
     try {
       await this.prisma.$transaction(async (tx) => {
-        // 1. 위시리스트 레코드 삭제
         await tx.wishlist.delete({
           where: {
             userId_lessonId: {
@@ -64,7 +64,6 @@ export class LikesService {
           },
         });
 
-        // 2. 해당 레슨의 좋아요 수 1 감소
         await tx.lesson.update({
           where: { id: lessonId },
           data: {
@@ -82,6 +81,58 @@ export class LikesService {
       }
       throw new InternalServerErrorException(
         '위시리스트 삭제 중 오류가 발생했습니다.',
+      );
+    }
+  }
+
+  async findAll(userId: number, pageOptionsDto: PageOptionsDto) {
+    const { page = 1, limit = 5 } = pageOptionsDto;
+    const skip = (page - 1) * limit;
+
+    try {
+      const [totalCount, items] = await Promise.all([
+        this.prisma.wishlist.count({ where: { userId } }),
+        this.prisma.wishlist.findMany({
+          where: { userId },
+          skip,
+          take: limit,
+          include: {
+            lesson: {
+              include: {
+                teacher: {
+                  include: {
+                    teacherProfile: true,
+                  },
+                },
+                lessonCategory: true,
+                region: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+
+      const data = items.map((item) => {
+        const lesson = item.lesson;
+
+        return {
+          lessonId: lesson.id,
+          title: lesson.title,
+          image: lesson.representativeImage,
+          categoryName: lesson.lessonCategory?.name ?? '미지정',
+          teacherNickname:
+            lesson.teacher?.teacherProfile?.nickname ?? '익명 강사',
+          regionName: lesson.region?.name ?? '지역 정보 없음',
+          price: lesson.price,
+        };
+      });
+
+      const pageMetaDto = new PageMetaDto(totalCount, page, limit);
+      return new PageDto(data, pageMetaDto);
+    } catch {
+      throw new InternalServerErrorException(
+        '위시리스트 조회 중 오류가 발생했습니다.',
       );
     }
   }
