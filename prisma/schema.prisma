@@ -160,7 +160,8 @@ model TeacherProfile {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   user   User                  @relation(fields: [userId], references: [id])
-
+  
+  lessons Lesson[] 
   @@map("teacher_profiles")
 }
 

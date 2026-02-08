@@ -3,6 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service'; // PrismaService를
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
 import { LessonSchedule, Level, Prisma } from '@prisma/client';
+import {
+  LessonPageOptionsDto,
+  LessonSort,
+} from './dto/lesson-page-options.dto';
 
 @Injectable()
 export class LessonsService {
@@ -21,28 +25,58 @@ export class LessonsService {
     });
   }
   // 클래스 목록 조회
-  async getLessons(filters: {
-    categoryId?: number;
-    regionId?: number;
-    level?: string;
-    search?: string;
-  }) {
+  async getLessons(filters: LessonPageOptionsDto) {
     return this.prisma.lesson.findMany({
       where: {
-        ...(filters.categoryId && { lessonCategoryId: filters.categoryId }),
+        ...(filters.level && { level: filters.level }),
         ...(filters.regionId && { regionId: filters.regionId }),
-        ...(filters.level && { level: filters.level as Level }),
-        ...(filters.search && {
-          OR: [
-            { title: { contains: filters.search } },
-            { description: { contains: filters.search } },
-          ],
+        ...(filters.categoryId && { lessonCategoryId: filters.categoryId }),
+        ...(filters.minPrice && { price: { gte: filters.minPrice } }),
+        ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
+        ...(filters.minParticipants && {
+          maxParticipants: { gte: filters.minParticipants },
+        }),
+        ...(filters.maxParticipants && {
+          maxParticipants: { lte: filters.maxParticipants },
+        }),
+        ...(filters.timeRange && {
+          schedules: {
+            some: {
+              startAt: { gte: new Date(filters.timeRange.split('-')[0]) },
+              endAt: { lte: new Date(filters.timeRange.split('-')[1]) },
+            },
+          },
         }),
       },
+      orderBy: (() => {
+        switch (filters.sort) {
+          case LessonSort.PRICE_ASC:
+            return { price: 'asc' };
+          case LessonSort.PRICE_DESC:
+            return { price: 'desc' };
+          case LessonSort.DEADLINE:
+            return { reservationLeadDays: 'asc' };
+          case LessonSort.UPDATE:
+            return { updatedAt: 'desc' };
+          case LessonSort.RATE:
+            return { rate: 'desc' };
+          case LessonSort.LIKES:
+            return { likes: 'desc' };
+          default:
+            return { createdAt: 'desc' };
+        }
+      })(),
+
       include: {
+        teacher: {
+          select: {
+            id: true,
+            nickname: true,
+          },
+        },
         lessonCategory: true,
         region: true,
-        teacher: true,
+        schedules: true,
       },
     });
   }

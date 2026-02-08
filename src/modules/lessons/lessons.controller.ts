@@ -16,6 +16,7 @@ import { LessonsService } from './lessons.service';
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
 import { plainToInstance } from 'class-transformer';
+import { LessonPageOptionsDto } from './dto/lesson-page-options.dto';
 // Prisma import removed — controller shouldn't construct Prisma input directly
 
 @Controller('lessons')
@@ -28,19 +29,10 @@ export class LessonsController {
     return this.lessonsService.createLesson(dto);
   }
   // GET /lessons : 클래스 목록 조회 (필터 지원)
+
   @Get()
-  async getLessons(
-    @Query('categoryId') categoryId?: string,
-    @Query('regionId') regionId?: string,
-    @Query('level') level?: string,
-    @Query('search') search?: string,
-  ) {
-    return await this.lessonsService.getLessons({
-      categoryId: categoryId ? Number(categoryId) : undefined,
-      regionId: regionId ? Number(regionId) : undefined,
-      level,
-      search,
-    });
+  async getLessons(@Query() filters: LessonPageOptionsDto) {
+    return this.lessonsService.getLessons(filters);
   }
 
   // GET /lessons/:lessonId : 클래스 상세 조회
