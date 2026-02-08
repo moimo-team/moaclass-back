@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service'; // PrismaService를 주입받는다고 가정
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
-import { LessonSchedule, Prisma } from '@prisma/client';
+import { LessonSchedule, Level, Prisma } from '@prisma/client';
 
 @Injectable()
 export class LessonsService {
@@ -17,6 +17,47 @@ export class LessonsService {
         lessonCategory: { connect: { id: lessonCategoryId } },
         region: { connect: { id: regionId } },
         ...rest, // 나머지 일반 필드들은 그대로 펼치기
+      },
+    });
+  }
+  // 클래스 목록 조회
+  async getLessons(filters: {
+    categoryId?: number;
+    regionId?: number;
+    level?: string;
+    search?: string;
+  }) {
+    return this.prisma.lesson.findMany({
+      where: {
+        ...(filters.categoryId && { lessonCategoryId: filters.categoryId }),
+        ...(filters.regionId && { regionId: filters.regionId }),
+        ...(filters.level && { level: filters.level as Level }),
+        ...(filters.search && {
+          OR: [
+            { title: { contains: filters.search } },
+            { description: { contains: filters.search } },
+          ],
+        }),
+      },
+      include: {
+        lessonCategory: true,
+        region: true,
+        teacher: true,
+      },
+    });
+  }
+
+  // 클래스 상세 조회
+  async getLessonDetail(lessonId: number) {
+    return this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        lessonCategory: true,
+        region: true,
+        teacher: true,
+        schedules: true,
+        images: true,
+        reviews: true,
       },
     });
   }

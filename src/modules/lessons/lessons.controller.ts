@@ -8,6 +8,8 @@ import {
   UploadedFile,
   UseInterceptors,
   Put,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { LessonsService } from './lessons.service';
@@ -24,6 +26,27 @@ export class LessonsController {
   @Post()
   async createLesson(@Body() dto: CreateLessonDto) {
     return this.lessonsService.createLesson(dto);
+  }
+  // GET /lessons : 클래스 목록 조회 (필터 지원)
+  @Get()
+  async getLessons(
+    @Query('categoryId') categoryId?: string,
+    @Query('regionId') regionId?: string,
+    @Query('level') level?: string,
+    @Query('search') search?: string,
+  ) {
+    return await this.lessonsService.getLessons({
+      categoryId: categoryId ? Number(categoryId) : undefined,
+      regionId: regionId ? Number(regionId) : undefined,
+      level,
+      search,
+    });
+  }
+
+  // GET /lessons/:lessonId : 클래스 상세 조회
+  @Get(':lessonId')
+  async getLessonDetail(@Param('lessonId') lessonId: string) {
+    return this.lessonsService.getLessonDetail(Number(lessonId));
   }
 
   // PUT /lessons/:lessonId : 클래스 수정
@@ -43,6 +66,7 @@ export class LessonsController {
   async deleteLesson(@Param('lessonId') lessonId: string) {
     return this.lessonsService.softDeleteLesson(lessonId);
   }
+
   // PUT /lesson/schedules/:scheduleId : 일정 수정
   @Put('schedules/:scheduleId')
   async updateSchedule(
