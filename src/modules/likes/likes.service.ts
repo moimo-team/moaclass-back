@@ -1,5 +1,11 @@
-import { Injectable, InternalServerErrorException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class LikesService {
@@ -15,35 +21,68 @@ export class LikesService {
     }
 
     try {
-      return await this.prisma.wishlist.create({
-        data: {
-          userId: userId,
-          lessonId: lessonId,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        // 위시리스트 레코드 생성
+        const wishlist = await tx.wishlist.create({
+          data: {
+            userId: userId,
+            lessonId: lessonId,
+          },
+        });
+        // 레슨 테이블의 likes 컬럼 1 증가
+        await tx.lesson.update({
+          where: { id: lessonId },
+          data: {
+            likes: { increment: 1 }, // Prisma의 원자적 연산 활용
+          },
+        });
+
+        return wishlist;
       });
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new ConflictException('이미 위시리스트에 추가된 클래스입니다.');
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new ConflictException('이미 위시리스트에 추가된 클래스입니다.');
+        }
       }
-      throw new InternalServerErrorException('위시리스트 추가 중 오류가 발생했습니다.');
+      throw new InternalServerErrorException(
+        '위시리스트 추가 중 오류가 발생했습니다.',
+      );
     }
   }
 
   async remove(userId: number, lessonId: number) {
-  try {
-    await this.prisma.wishlist.delete({
-      where: {
-        userId_lessonId: {
-          userId: userId,
-          lessonId: lessonId,
-        },
-      },
-    });
-  } catch (error) {
-    if (error.code === 'P2025') {
-      throw new NotFoundException('위시리스트에 해당 클래스가 존재하지 않습니다.');
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 1. 위시리스트 레코드 삭제
+        await tx.wishlist.delete({
+          where: {
+            userId_lessonId: {
+              userId: userId,
+              lessonId: lessonId,
+            },
+          },
+        });
+
+        // 2. 해당 레슨의 좋아요 수 1 감소
+        await tx.lesson.update({
+          where: { id: lessonId },
+          data: {
+            likes: { decrement: 1 },
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException(
+            '위시리스트에 해당 클래스가 존재하지 않습니다.',
+          );
+        }
+      }
+      throw new InternalServerErrorException(
+        '위시리스트 삭제 중 오류가 발생했습니다.',
+      );
     }
-    throw new InternalServerErrorException('위시리스트 삭제 중 오류가 발생했습니다.');
   }
-}
 }

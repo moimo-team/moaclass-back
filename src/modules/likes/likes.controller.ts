@@ -1,4 +1,14 @@
-import { Controller, Post, Body, UseGuards, Req, Res, HttpStatus, HttpException, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Res,
+  HttpStatus,
+  HttpException,
+  Delete,
+} from '@nestjs/common';
 import * as express from 'express';
 import { LikesService } from './likes.service';
 import { CreateLikeDto } from './dto/create-like.dto';
@@ -19,7 +29,7 @@ export class LikesController {
     try {
       const userId = req.user.id;
       await this.likesService.create(userId, dto.lessonId);
-      
+
       return res.status(HttpStatus.CREATED).send();
     } catch (error) {
       if (error instanceof HttpException) {
@@ -30,22 +40,22 @@ export class LikesController {
   }
 
   @Delete()
-    @UseGuards(JwtAuthGuard)
-    async remove(
+  @UseGuards(JwtAuthGuard)
+  async remove(
     @Body() dto: CreateLikeDto,
     @Req() req: express.Request & { user: JwtPayload },
     @Res() res: express.Response,
-    ) {
+  ) {
     try {
-        const userId = req.user.id;
-        await this.likesService.remove(userId, dto.lessonId);
-        
-        return res.status(HttpStatus.NO_CONTENT).send();
+      const userId = req.user.id;
+      await this.likesService.remove(userId, dto.lessonId);
+
+      return res.status(HttpStatus.NO_CONTENT).send();
     } catch (error) {
-        if (error instanceof HttpException) {
+      if (error instanceof HttpException) {
         return res.status(error.getStatus()).json({ message: error.message });
-        }
-        return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
+      }
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
     }
-    }
+  }
 }
