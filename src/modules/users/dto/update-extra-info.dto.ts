@@ -39,4 +39,11 @@ export class UpdateExtraInfoDto {
   @IsOptional()
   @IsString()
   image?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value !== null ? Number(value) : value,
+  )
+  @IsInt()
+  regionId?: number;
 }

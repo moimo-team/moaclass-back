@@ -1,32 +1,190 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service'; // PrismaService를 주입받는다고 가정
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
 import { LessonSchedule, Prisma } from '@prisma/client';
+import {
+  LessonPageOptionsDto,
+  LessonSort,
+  LessonDay,
+} from './dto/lesson-page-options.dto';
+import { UploadService } from '../upload/upload.service';
 
 @Injectable()
 export class LessonsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
+  ) {}
 
-  async createLesson(dto: CreateLessonDto) {
-    const { teacherId, lessonCategoryId, regionId, ...rest } = dto;
+  async createLesson(dto: CreateLessonDto, file?: Express.Multer.File) {
+    let imageUrl: string | null = null;
+    if (file) {
+      imageUrl = await this.uploadService.uploadFile('lesson', file);
+      console.log('파일업로드');
+      return this.prisma.lesson.create({
+        data: {
+          ...dto,
+          status: dto.status ?? 'DRAFT',
+          representativeImage: imageUrl,
+        },
+      });
+    }
+    throw new BadRequestException('대표 이미지를 업로드해야 합니다.');
+  }
+  // 클래스 목록 조회
+  async getLessons(filters: LessonPageOptionsDto) {
+    let lessons = await this.prisma.lesson.findMany({
+      where: {
+        ...(filters.regionId && { regionId: filters.regionId }),
+        ...(filters.categoryId && { lessonCategoryId: filters.categoryId }),
+        ...(filters.level && { level: filters.level }),
+        ...(filters.status && {
+          status: filters.status,
+        }),
+        ...(filters.minParticipants && {
+          maxParticipants: { gte: filters.minParticipants },
+        }),
+        ...(filters.maxParticipants && {
+          maxParticipants: { lte: filters.maxParticipants },
+        }),
+        ...(filters.minPrice && { price: { gte: filters.minPrice } }),
+        ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
+      },
+      orderBy: (() => {
+        switch (filters.sort) {
+          case LessonSort.PRICE_ASC:
+            return { discountedPrice: 'asc' };
+          case LessonSort.PRICE_DESC:
+            return { discountedPrice: 'desc' };
+          case LessonSort.DEADLINE:
+            return { reservationLeadDays: 'asc' };
+          case LessonSort.UPDATE:
+            return { updatedAt: 'desc' };
+          case LessonSort.RATE:
+            return { rate: 'desc' };
+          case LessonSort.LIKES:
+            return { likes: 'desc' };
+          default:
+            return { createdAt: 'desc' };
+        }
+      })(),
+      include: {
+        teacher: { select: { id: true, nickname: true } },
+        lessonCategory: true,
+        region: true,
+        schedules: true,
+      },
+    }); // 요일 + 시간 범위 필터링 (JS 레벨에서 처리)
+    if (filters.days?.length || filters.timeRange) {
+      // const [startHour, endHour] = filters.timeRange
+      //   ? filters.timeRange.split('-').map(Number)
+      //   : [undefined, undefined];
 
-    return await this.prisma.lesson.create({
-      data: {
-        teacher: { connect: { id: teacherId } },
-        lessonCategory: { connect: { id: lessonCategoryId } },
-        region: { connect: { id: regionId } },
-        ...rest, // 나머지 일반 필드들은 그대로 펼치기
+      lessons = lessons.filter((lesson) =>
+        lesson.schedules.some((schedule) => {
+          const startDate = new Date(schedule.startAt);
+          const endDate = new Date(schedule.endAt);
+
+          const day = startDate.getDay(); // 0=일, 6=토
+          // const startHourOfLesson = startDate.getHours();
+          // const endHourOfLesson = endDate.getHours();
+
+          // 요일 필터
+          let dayMatch = true;
+          if (filters.days?.length) {
+            if (filters.days.includes(LessonDay.WEEKDAY)) {
+              dayMatch = day >= 1 && day <= 5;
+            } else if (filters.days.includes(LessonDay.SATURDAY)) {
+              dayMatch = day === 6;
+            } else if (filters.days.includes(LessonDay.WEEKEND)) {
+              dayMatch = day === 0 || day === 6;
+            }
+          }
+
+          // // 시간 범위 필터 (겹치는 시간대 포함)
+          // let timeMatch = true;
+          // if (startHour !== undefined && endHour !== undefined) {
+          //   timeMatch =
+          //     startHourOfLesson <= endHour && endHourOfLesson >= startHour;
+          //   console.log(startHourOfLesson, endHour, endHourOfLesson, startHour);
+          // }
+
+          // return dayMatch && timeMatch;
+          return dayMatch;
+        }),
+      );
+    }
+
+    return lessons;
+  }
+
+  // 클래스 상세 조회
+  async getLessonDetail(lessonId: number) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        teacher: { select: { id: true, nickname: true, image: true } },
+        lessonCategory: true,
+        region: true, // 커리큘럼은 Lesson 테이블의 curriculum 필드 그대로 가져옴
+        // 일정
+        schedules: {
+          select: {
+            id: true,
+            startAt: true,
+            endAt: true,
+            currentParticipants: true,
+            status: true,
+          },
+          orderBy: { startAt: 'asc' },
+        }, // 이미지
+        images: {
+          select: { id: true, image: true, sequence: true },
+          orderBy: { sequence: 'asc' },
+        }, // 리뷰
+        reviews: {
+          select: {
+            id: true,
+            rating: true,
+            content: true,
+            representativeImage: true,
+            createdAt: true,
+            user: { select: { id: true, nickname: true } },
+            images: {
+              select: { id: true, image: true, sequence: true },
+              orderBy: { sequence: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
+    if (!lesson) {
+      throw new NotFoundException(`Lesson with id ${lessonId} not found`);
+    }
+    return lesson;
   }
 
   // 클래스 수정
-  async updateLesson(lessonId: string, dto: UpdateLessonDto) {
+  async updateLesson(
+    lessonId: number,
+    dto: UpdateLessonDto,
+    file?: Express.Multer.File,
+  ) {
+    let imageUrl: string | undefined;
+    if (file) {
+      imageUrl = await this.uploadService.uploadFile('lesson', file);
+      console.log('파일업로드 완료');
+    }
     return this.prisma.lesson.update({
-      where: { id: Number(lessonId) },
+      where: { id: lessonId },
       data: {
         ...dto,
+        ...(imageUrl && { representativeImage: imageUrl }), // 파일이 있으면 교체, 없으면 기존 representativeImage 유지
       },
     });
   }

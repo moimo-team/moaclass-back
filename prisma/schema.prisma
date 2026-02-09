@@ -63,7 +63,6 @@ enum ProviderType {
 }
 
 //검토완료
-
 model User {
   id           Int          @id @default(autoincrement())
   email        String       @unique
@@ -82,8 +81,7 @@ model User {
   regionId Int?    @map("region_id")
   region   Region? @relation(fields: [regionId], references: [id])
 
-  teacherProfile    TeacherProfile?
-  lessons           Lesson[]
+  teacherProfile    TeacherProfile?  
   interests         UserInterest[]
   hostedMeetings    Meeting[]          @relation("HostedMeetings")
   participations    Participation[]
@@ -98,6 +96,7 @@ model User {
 
   @@map("users")
 }
+
 
 model Region {
   id      Int      @id @default(autoincrement())
@@ -161,7 +160,8 @@ model TeacherProfile {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
   user   User                  @relation(fields: [userId], references: [id])
-
+  
+  lessons Lesson[] 
   @@map("teacher_profiles")
 }
 
@@ -241,7 +241,7 @@ model Lesson {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  teacher        User             @relation(fields: [teacherId], references: [id])
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id])
   lessonCategory LessonCategory   @relation(fields: [lessonCategoryId], references: [id])
   region         Region           @relation(fields: [regionId], references: [id])
   images         LessonImage[]

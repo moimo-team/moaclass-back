@@ -8,31 +8,60 @@ import {
   UploadedFile,
   UseInterceptors,
   Put,
+  Get,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { LessonsService } from './lessons.service';
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
 import { plainToInstance } from 'class-transformer';
-// Prisma import removed — controller shouldn't construct Prisma input directly
+import { LessonPageOptionsDto } from './dto/lesson-page-options.dto';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import multer from 'multer';
 
 @Controller('lessons')
 export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
 
   // POST /lessons : 클래스 생성
+  @UseGuards(JwtAuthGuard)
   @Post()
-  async createLesson(@Body() dto: CreateLessonDto) {
-    return this.lessonsService.createLesson(dto);
+  @UseInterceptors(
+    FileInterceptor('representativeImage', { storage: multer.memoryStorage() }),
+  )
+  async createLesson(
+    @Body() dto: CreateLessonDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.lessonsService.createLesson(dto, file);
+  }
+  // GET /lessons : 클래스 목록 조회 (필터 지원)
+
+  @Get()
+  async getLessons(@Query() filters: LessonPageOptionsDto) {
+    return this.lessonsService.getLessons(filters);
+  }
+
+  // GET /lessons/:lessonId : 클래스 상세 조회
+  @Get(':lessonId')
+  async getLessonDetail(@Param('lessonId') lessonId: string) {
+    return this.lessonsService.getLessonDetail(Number(lessonId));
   }
 
   // PUT /lessons/:lessonId : 클래스 수정
+  @UseGuards(JwtAuthGuard)
   @Put(':lessonId')
+  @UseInterceptors(
+    FileInterceptor('representativeImage', { storage: multer.memoryStorage() }),
+  )
   async updateLesson(
     @Param('lessonId') lessonId: string,
     @Body() dto: UpdateLessonDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.lessonsService.updateLesson(lessonId, dto);
+    return this.lessonsService.updateLesson(Number(lessonId), dto, file);
   }
 
   // DELETE /lessons/:lessonId : 클래스 삭제 (soft delete)
@@ -43,6 +72,7 @@ export class LessonsController {
   async deleteLesson(@Param('lessonId') lessonId: string) {
     return this.lessonsService.softDeleteLesson(lessonId);
   }
+
   // PUT /lesson/schedules/:scheduleId : 일정 수정
   @Put('schedules/:scheduleId')
   async updateSchedule(
