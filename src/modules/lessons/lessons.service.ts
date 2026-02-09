@@ -88,7 +88,7 @@ export class LessonsService {
       lessons = lessons.filter((lesson) =>
         lesson.schedules.some((schedule) => {
           const startDate = new Date(schedule.startAt);
-          const endDate = new Date(schedule.endAt);
+          // const endDate = new Date(schedule.endAt);
 
           const day = startDate.getDay(); // 0=일, 6=토
           // const startHourOfLesson = startDate.getHours();
