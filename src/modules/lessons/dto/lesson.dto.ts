@@ -6,7 +6,7 @@ import { Type } from 'class-transformer';
 export class CreateLessonDto {
   @IsInt()
   @Type(() => Number)
-  teacherId: number;
+  userId: number;
 
   @IsInt()
   @Type(() => Number)
@@ -23,7 +23,7 @@ export class CreateLessonDto {
 
   @IsInt()
   @Type(() => Number)
-  durationMin: number;
+  durationSec: number;
 
   @IsString()
   curriculum: string;

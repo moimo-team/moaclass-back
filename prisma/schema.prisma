@@ -394,16 +394,19 @@ model Wishlist {
 model PointTransaction {
   id        Int               @id @default(autoincrement())
   userId    Int               @map("user_id")
-  lessonId  Int               @map("lesson_id")
+  lessonId  Int?               @map("lesson_id") //충전의 경우 필요없음
   couponId  Int?              @map("coupon_id")
   amount    Int
   type      PointType
   status    TransactionStatus
+  reason        String?       @map("reason")         
+  detailReason  String?       @map("detail_reason")  
+
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @default(now()) @map("updated_at")
 
   user   User    @relation(fields: [userId], references: [id])
-  lesson Lesson  @relation(fields: [lessonId], references: [id])
+  lesson Lesson?  @relation(fields: [lessonId], references: [id])
   coupon Coupon? @relation(fields: [couponId], references: [id])
 
   enrollments Enrollment[]

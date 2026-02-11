@@ -79,7 +79,8 @@ export class LessonsService {
         region: true,
         schedules: true,
       },
-    }); // 요일 + 시간 범위 필터링 (JS 레벨에서 처리)
+    });
+    //TODO : 스케줄 일정 필터링
     if (filters.days?.length || filters.timeRange) {
       // const [startHour, endHour] = filters.timeRange
       //   ? filters.timeRange.split('-').map(Number)
@@ -88,7 +89,6 @@ export class LessonsService {
       lessons = lessons.filter((lesson) =>
         lesson.schedules.some((schedule) => {
           const startDate = new Date(schedule.startAt);
-          const endDate = new Date(schedule.endAt);
 
           const day = startDate.getDay(); // 0=일, 6=토
           // const startHourOfLesson = startDate.getHours();
@@ -101,8 +101,8 @@ export class LessonsService {
               dayMatch = day >= 1 && day <= 5;
             } else if (filters.days.includes(LessonDay.SATURDAY)) {
               dayMatch = day === 6;
-            } else if (filters.days.includes(LessonDay.WEEKEND)) {
-              dayMatch = day === 0 || day === 6;
+            } else if (filters.days.includes(LessonDay.SUNDAY)) {
+              dayMatch = day === 0;
             }
           }
 

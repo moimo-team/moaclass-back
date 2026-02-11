@@ -1,20 +1,32 @@
-import { Controller, Get, Post, Query, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Body,
+  UseGuards,
+  Req,
+  Param,
+} from '@nestjs/common';
 import { PaymentsService } from './payments.service';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { JwtPayload } from 'src/auth/jwt-payload.interface';
 
 @Controller('payments')
+@UseGuards(JwtAuthGuard)
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  // 1. 결제 정보 조회 (Preview)
   @Get('preview')
   async getPaymentPreview(
+    @Req() req: Request & { user: JwtPayload },
     @Query('scheduleId') scheduleId: number,
     @Query('quantity') quantity: number,
   ) {
-    return this.paymentsService.getPaymentPreview(scheduleId, quantity);
+    const userId = req.user.id;
+    return this.paymentsService.getPaymentPreview(scheduleId, quantity, userId);
   }
 
-  // 2. 최종 결제 금액 계산 (Calculate)
   @Post('calculate')
   async calculateFinalPrice(
     @Body() body: { scheduleId: number; quantity: number; couponId?: number },
@@ -25,5 +37,15 @@ export class PaymentsController {
       quantity,
       couponId,
     );
+  }
+
+  // 결제 상세 조회
+  @Get('detail/:transactionId')
+  async getPaymentDetail(
+    @Req() req: Request & { user: JwtPayload },
+    @Param('transactionId') transactionId: number,
+  ) {
+    const userId = req.user.id;
+    return this.paymentsService.getPaymentDetail(transactionId, userId);
   }
 }
