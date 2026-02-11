@@ -19,6 +19,15 @@ CREATE TYPE "NotificationType" AS ENUM ('PARTICIPATION_REQUEST', 'PARTICIPATION_
 -- CreateEnum
 CREATE TYPE "ProviderType" AS ENUM ('GOOGLE', 'KAKAO');
 
+-- CreateEnum
+CREATE TYPE "TransactionStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "PointType" AS ENUM ('CHARGE', 'USE', 'REFUND');
+
+-- CreateEnum
+CREATE TYPE "DiscountType" AS ENUM ('FIXED', 'PERCENT');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
@@ -96,16 +105,6 @@ CREATE TABLE "teacher_profiles" (
 );
 
 -- CreateTable
-CREATE TABLE "teacher_profile_images" (
-    "id" SERIAL NOT NULL,
-    "profile_id" INTEGER NOT NULL,
-    "image_url" TEXT NOT NULL,
-    "sequence" INTEGER NOT NULL,
-
-    CONSTRAINT "teacher_profile_images_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "meetings" (
     "id" SERIAL NOT NULL,
     "title" VARCHAR(100) NOT NULL,
@@ -142,20 +141,20 @@ CREATE TABLE "participations" (
 -- CreateTable
 CREATE TABLE "lessons" (
     "id" SERIAL NOT NULL,
-    "teacher_id" INTEGER NOT NULL,
+    "user_id" INTEGER NOT NULL,
     "lesson_category_id" INTEGER NOT NULL,
     "title" VARCHAR(50) NOT NULL,
     "description" TEXT NOT NULL,
     "level" "Level" NOT NULL,
-    "duration_min" INTEGER NOT NULL,
+    "duration_sec" INTEGER NOT NULL,
     "curriculum" TEXT NOT NULL,
     "status" "LessonStatus" NOT NULL DEFAULT 'ACTIVE',
     "price" INTEGER NOT NULL DEFAULT 0,
     "discount_rate" INTEGER NOT NULL DEFAULT 0,
     "discounted_price" INTEGER NOT NULL DEFAULT 0,
-    "max_participants" INTEGER,
+    "max_participants" INTEGER NOT NULL,
     "representative_image" TEXT NOT NULL,
-    "likes" INTEGER NOT NULL DEFAULT 0,
+    "like_count" INTEGER NOT NULL DEFAULT 0,
     "region_id" INTEGER NOT NULL,
     "address" TEXT NOT NULL,
     "latitude" DOUBLE PRECISION NOT NULL,
@@ -210,9 +209,9 @@ CREATE TABLE "enrollments" (
     "id" SERIAL NOT NULL,
     "user_id" INTEGER NOT NULL,
     "schedule_id" INTEGER NOT NULL,
-    "payment_id" INTEGER,
-    "status" "ParticipationStatus" NOT NULL DEFAULT 'PENDING',
+    "status" "ParticipationStatus" NOT NULL,
     "checked_in" "Attendance" NOT NULL DEFAULT 'PENDING',
+    "point_transaction_id" INTEGER NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -269,28 +268,18 @@ CREATE TABLE "wishlists" (
 );
 
 -- CreateTable
-CREATE TABLE "payments" (
-    "id" SERIAL NOT NULL,
-    "user_id" INTEGER NOT NULL,
-    "lesson_id" INTEGER NOT NULL,
-    "amount" INTEGER NOT NULL,
-    "status" TEXT NOT NULL,
-    "method" TEXT NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "point_transactions" (
     "id" SERIAL NOT NULL,
     "user_id" INTEGER NOT NULL,
-    "payment_id" INTEGER,
+    "lesson_id" INTEGER NOT NULL,
     "coupon_id" INTEGER,
     "amount" INTEGER NOT NULL,
-    "type" TEXT NOT NULL,
+    "type" "PointType" NOT NULL,
+    "status" "TransactionStatus" NOT NULL,
+    "reason" TEXT,
+    "detailReason" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "point_transactions_pkey" PRIMARY KEY ("id")
 );
@@ -300,7 +289,7 @@ CREATE TABLE "coupons" (
     "id" SERIAL NOT NULL,
     "code" TEXT NOT NULL,
     "description" TEXT,
-    "discount_type" TEXT NOT NULL,
+    "discountType" "DiscountType" NOT NULL,
     "discount_value" INTEGER NOT NULL,
     "max_usage" INTEGER NOT NULL,
     "current_usage" INTEGER NOT NULL DEFAULT 0,
@@ -364,9 +353,6 @@ CREATE UNIQUE INDEX "lesson_schedules_lesson_id_start_at_end_at_key" ON "lesson_
 CREATE UNIQUE INDEX "lesson_sub_categories_map_lesson_id_sub_category_id_key" ON "lesson_sub_categories_map"("lesson_id", "sub_category_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "enrollments_payment_id_key" ON "enrollments"("payment_id");
-
--- CreateIndex
 CREATE UNIQUE INDEX "enrollments_user_id_schedule_id_key" ON "enrollments"("user_id", "schedule_id");
 
 -- CreateIndex
@@ -391,9 +377,6 @@ ALTER TABLE "user_interests" ADD CONSTRAINT "user_interests_lesson_category_id_f
 ALTER TABLE "teacher_profiles" ADD CONSTRAINT "teacher_profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "teacher_profile_images" ADD CONSTRAINT "teacher_profile_images_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "teacher_profiles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "meetings" ADD CONSTRAINT "meetings_host_id_fkey" FOREIGN KEY ("host_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -406,7 +389,7 @@ ALTER TABLE "participations" ADD CONSTRAINT "participations_user_id_fkey" FOREIG
 ALTER TABLE "participations" ADD CONSTRAINT "participations_meeting_id_fkey" FOREIGN KEY ("meeting_id") REFERENCES "meetings"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "lessons" ADD CONSTRAINT "lessons_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "lessons" ADD CONSTRAINT "lessons_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "lessons" ADD CONSTRAINT "lessons_lesson_category_id_fkey" FOREIGN KEY ("lesson_category_id") REFERENCES "lesson_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -433,7 +416,7 @@ ALTER TABLE "enrollments" ADD CONSTRAINT "enrollments_user_id_fkey" FOREIGN KEY 
 ALTER TABLE "enrollments" ADD CONSTRAINT "enrollments_schedule_id_fkey" FOREIGN KEY ("schedule_id") REFERENCES "lesson_schedules"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "enrollments" ADD CONSTRAINT "enrollments_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "enrollments" ADD CONSTRAINT "enrollments_point_transaction_id_fkey" FOREIGN KEY ("point_transaction_id") REFERENCES "point_transactions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "lessons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -463,16 +446,10 @@ ALTER TABLE "wishlists" ADD CONSTRAINT "wishlists_user_id_fkey" FOREIGN KEY ("us
 ALTER TABLE "wishlists" ADD CONSTRAINT "wishlists_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "lessons"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "payments" ADD CONSTRAINT "payments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "payments" ADD CONSTRAINT "payments_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "lessons"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "point_transactions" ADD CONSTRAINT "point_transactions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "point_transactions" ADD CONSTRAINT "point_transactions_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "point_transactions" ADD CONSTRAINT "point_transactions_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "lessons"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "point_transactions" ADD CONSTRAINT "point_transactions_coupon_id_fkey" FOREIGN KEY ("coupon_id") REFERENCES "coupons"("id") ON DELETE SET NULL ON UPDATE CASCADE;

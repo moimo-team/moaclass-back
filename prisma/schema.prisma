@@ -62,6 +62,24 @@ enum ProviderType {
   KAKAO
 }
 
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum PointType {
+  CHARGE
+  USE
+  REFUND
+}
+
+enum DiscountType {
+  FIXED
+  PERCENT
+}
+
 //검토완료
 model User {
   id           Int          @id @default(autoincrement())
@@ -90,9 +108,9 @@ model User {
   notificationsSend Notification[]     @relation("Sender")
   reviews           Review[]
   wishlists         Wishlist[]
-  payments          Payment[]
   pointTransactions PointTransaction[]
   userCoupons       UserCoupon[]
+  lessons           Lesson[]           @relation("UserLessons")
 
   @@map("users")
 }
@@ -159,9 +177,8 @@ model TeacherProfile {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
-  user   User                  @relation(fields: [userId], references: [id])
-  
-  lessons Lesson[] 
+  user User @relation(fields: [userId], references: [id])
+
   @@map("teacher_profiles")
 }
 
@@ -209,12 +226,12 @@ model Participation {
 
 model Lesson {
   id               Int    @id @default(autoincrement())
-  teacherId        Int    @map("teacher_id")
+  userId           Int    @map("user_id")
   lessonCategoryId Int    @map("lesson_category_id")
   title            String @db.VarChar(50)
   description      String @db.Text
   level            Level
-  durationMin      Int    @map("duration_min")
+  durationSec      Int    @map("duration_sec")
   curriculum       String @db.Text
 
   status          LessonStatus @default(ACTIVE)
@@ -222,9 +239,9 @@ model Lesson {
   discountRate    Int          @default(0) @map("discount_rate")
   discountedPrice Int          @default(0) @map("discounted_price")
 
-  maxParticipants     Int?   @map("max_participants")
+  maxParticipants     Int    @map("max_participants")
   representativeImage String @map("representative_image")
-  likes               Int    @default(0)
+  likeCount           Int    @default(0) @map("like_count")
 
   regionId       Int    @map("region_id")
   address        String
@@ -241,15 +258,15 @@ model Lesson {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  teacher TeacherProfile @relation(fields: [teacherId], references: [id])
-  lessonCategory LessonCategory   @relation(fields: [lessonCategoryId], references: [id])
-  region         Region           @relation(fields: [regionId], references: [id])
-  images         LessonImage[]
-  schedules      LessonSchedule[]
-  notifications  Notification[]
-  reviews        Review[]
-  wishlists      Wishlist[]
-  payments       Payment[]
+  teacher           User                 @relation("UserLessons", fields: [userId], references: [id])
+  lessonCategory    LessonCategory       @relation(fields: [lessonCategoryId], references: [id])
+  region            Region               @relation(fields: [regionId], references: [id])
+  images            LessonImage[]
+  schedules         LessonSchedule[]
+  notifications     Notification[]
+  reviews           Review[]
+  wishlists         Wishlist[]
+  pointTransactions PointTransaction[]
 
   subCategories LessonSubCategoryMap[]
 
@@ -297,18 +314,18 @@ model LessonSubCategoryMap {
 }
 
 model Enrollment {
-  id         Int                 @id @default(autoincrement())
-  userId     Int                 @map("user_id")
-  scheduleId Int                 @map("schedule_id")
-  paymentId  Int?                @unique @map("payment_id")
-  status     ParticipationStatus @default(PENDING)
-  checkedIn  Attendance          @default(PENDING) @map("checked_in")
-  createdAt  DateTime            @default(now()) @map("created_at")
-  updatedAt  DateTime            @default(now()) @updatedAt @map("updated_at")
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @map("user_id")
+  scheduleId         Int                 @map("schedule_id")
+  status             ParticipationStatus
+  checkedIn          Attendance          @default(PENDING) @map("checked_in")
+  pointTransactionId Int                 @map("point_transaction_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at")
 
-  user     User           @relation(fields: [userId], references: [id])
-  schedule LessonSchedule @relation(fields: [scheduleId], references: [id])
-  payment  Payment?       @relation("EnrollmentPayment", fields: [paymentId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  schedule    LessonSchedule   @relation(fields: [scheduleId], references: [id])
+  transaction PointTransaction @relation(fields: [pointTransactionId], references: [id])
 
   @@unique([userId, scheduleId])
   @@map("enrollments")
@@ -375,36 +392,23 @@ model Wishlist {
   @@map("wishlists")
 }
 
-model Payment {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  lessonId  Int      @map("lesson_id")
-  amount    Int
-  status    String
-  method    String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
-
-  user              User               @relation(fields: [userId], references: [id])
-  lesson            Lesson             @relation(fields: [lessonId], references: [id])
-  pointTransactions PointTransaction[]
-  enrollment        Enrollment?        @relation("EnrollmentPayment")
-
-  @@map("payments")
-}
-
 model PointTransaction {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  paymentId Int?     @map("payment_id")
-  couponId  Int?     @map("coupon_id")
-  amount    Int
-  type      String
-  createdAt DateTime @default(now()) @map("created_at")
+  id           Int               @id @default(autoincrement())
+  userId       Int               @map("user_id")
+  lessonId     Int               @map("lesson_id")
+  couponId     Int?              @map("coupon_id")
+  amount       Int
+  type         PointType
+  status       TransactionStatus
+  reason       String?
+  detailReason String?            @map("detail_reason")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
 
-  user    User     @relation(fields: [userId], references: [id])
-  payment Payment? @relation(fields: [paymentId], references: [id])
-  coupon  Coupon?  @relation(fields: [couponId], references: [id])
+  user   User    @relation(fields: [userId], references: [id])
+  lesson Lesson  @relation(fields: [lessonId], references: [id])
+  coupon Coupon? @relation(fields: [couponId], references: [id])
+  enrollments Enrollment[]
 
   @@map("point_transactions")
 }
@@ -413,7 +417,7 @@ model Coupon {
   id            Int      @id @default(autoincrement())
   code          String   @unique
   description   String?
-  discountType  String   @map("discount_type")
+  discountType  DiscountType
   discountValue Int      @map("discount_value")
   maxUsage      Int      @map("max_usage")
   currentUsage  Int      @default(0) @map("current_usage")
