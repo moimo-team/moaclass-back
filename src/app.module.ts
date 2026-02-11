@@ -12,7 +12,9 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { RegionsModule } from './modules/regions/regions.module';
 import { LessonsModule } from './modules/lessons/lessons.module';
 import { MomentoesModule } from './modules/momentoes/momentoes.module';
-import { LikesModule } from './modules/likes/likes.module';
+import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
+import { PaymentsModule } from './modules/payments/payments.modyle';
+// import { LikesModule } from './modules/likes/likes.module';
 
 @Module({
   imports: [
@@ -27,7 +29,9 @@ import { LikesModule } from './modules/likes/likes.module';
     RegionsModule,
     LessonsModule,
     MomentoesModule,
-    LikesModule,
+    EnrollmentsModule,
+    PaymentsModule,
+    // LikesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
