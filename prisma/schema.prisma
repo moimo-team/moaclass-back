@@ -356,7 +356,7 @@ model Review {
   userId              Int      @map("user_id")
   lessonId            Int      @map("lesson_id")
   representativeImage String?  @map("representative_image")
-  rating              Int
+  rating              Float
   content             String
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
@@ -395,7 +395,7 @@ model Wishlist {
 model PointTransaction {
   id           Int               @id @default(autoincrement())
   userId       Int               @map("user_id")
-  lessonId     Int               @map("lesson_id")
+  lessonId     Int?               @map("lesson_id")
   couponId     Int?              @map("coupon_id")
   amount       Int
   type         PointType
@@ -406,7 +406,7 @@ model PointTransaction {
   updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
 
   user   User    @relation(fields: [userId], references: [id])
-  lesson Lesson  @relation(fields: [lessonId], references: [id])
+  lesson Lesson?  @relation(fields: [lessonId], references: [id])
   coupon Coupon? @relation(fields: [couponId], references: [id])
   enrollments Enrollment[]
 

@@ -1,7 +1,6 @@
 import {
   Controller,
   Post,
-  Patch,
   Delete,
   Param,
   Body,
@@ -11,21 +10,22 @@ import {
   Get,
   Query,
   UseGuards,
+  Req,
+  ParseIntPipe,
+  HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { LessonsService } from './lessons.service';
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
-import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
-import { plainToInstance } from 'class-transformer';
 import { LessonPageOptionsDto } from './dto/lesson-page-options.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtPayload } from '../../auth/jwt-payload.interface';
 import multer from 'multer';
 
 @Controller('lessons')
 export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
 
-  // POST /lessons : 클래스 생성
   @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(
@@ -33,24 +33,22 @@ export class LessonsController {
   )
   async createLesson(
     @Body() dto: CreateLessonDto,
+    @Req() req: Request & { user: JwtPayload },
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.lessonsService.createLesson(dto, file);
+    await this.lessonsService.createLesson(req.user.id, dto, file);
   }
-  // GET /lessons : 클래스 목록 조회 (필터 지원)
 
   @Get()
   async getLessons(@Query() filters: LessonPageOptionsDto) {
     return this.lessonsService.getLessons(filters);
   }
 
-  // GET /lessons/:lessonId : 클래스 상세 조회
   @Get(':lessonId')
   async getLessonDetail(@Param('lessonId') lessonId: string) {
     return this.lessonsService.getLessonDetail(Number(lessonId));
   }
 
-  // PUT /lessons/:lessonId : 클래스 수정
   @UseGuards(JwtAuthGuard)
   @Put(':lessonId')
   @UseInterceptors(
@@ -59,53 +57,24 @@ export class LessonsController {
   async updateLesson(
     @Param('lessonId') lessonId: string,
     @Body() dto: UpdateLessonDto,
+    @Req() req: Request & { user: JwtPayload },
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.lessonsService.updateLesson(Number(lessonId), dto, file);
+    await this.lessonsService.updateLesson(
+      req.user.id,
+      Number(lessonId),
+      dto,
+      file,
+    );
   }
 
-  // DELETE /lessons/:lessonId : 클래스 삭제 (soft delete)
-
-  //TODO : 클래스 상태 수정 API 추가
-
+  @UseGuards(JwtAuthGuard)
   @Delete(':lessonId')
-  async deleteLesson(@Param('lessonId') lessonId: string) {
-    return this.lessonsService.softDeleteLesson(lessonId);
-  }
-
-  // PUT /lesson/schedules/:scheduleId : 일정 수정
-  @Put('schedules/:scheduleId')
-  async updateSchedule(
-    @Param('scheduleId') scheduleId: string,
-    @Body() dto: UpdateScheduleDto,
+  @HttpCode(204)
+  async deleteLesson(
+    @Param('lessonId', ParseIntPipe) lessonId: number,
+    @Req() req: Request & { user: JwtPayload },
   ) {
-    return this.lessonsService.updateSchedule(scheduleId, dto);
+    await this.lessonsService.softDeleteLesson(req.user.id, lessonId);
   }
-  // POST /lessons/:lessonId/schedules : 일정 추가
-  @Post(':lessonId/schedules')
-  async addSchedule(@Param('lessonId') lessonId: string, @Body() body: any) {
-    const dto = plainToInstance(CreateScheduleDto, body);
-    return this.lessonsService.addSchedule(lessonId, dto);
-  }
-  // DELETE /lesson/schedules/:scheduleId : 일정 삭제
-  @Delete('schedules/:scheduleId')
-  async deleteSchedule(@Param('scheduleId') scheduleId: string) {
-    return this.lessonsService.deleteSchedule(scheduleId);
-  }
-
-  //   // POST /lessons/:lessonId/images : 갤러리 이미지 업로드
-  //   @Post(':lessonId/images')
-  //   @UseInterceptors(FileInterceptor('file'))
-  //   async uploadImage(
-  //     @Param('lessonId') lessonId: string,
-  //     @UploadedFile() file: Express.Multer.File,
-  //   ) {
-  //     return this.lessonsService.uploadImage(lessonId, file);
-  //   }
-
-  //   // DELETE /lesson/images/:imageId : 갤러리 이미지 삭제
-  //   @Delete('images/:imageId')
-  //   async deleteImage(@Param('imageId') imageId: string) {
-  //     return this.lessonsService.deleteImage(imageId);
-  //   }
 }

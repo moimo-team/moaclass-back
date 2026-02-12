@@ -1,26 +1,20 @@
 import {
-  IsDate,
-  IsInt,
   IsEnum,
   IsOptional,
-  IsNumber,
-  IsDateString,
+  Matches,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { LessonScheduleStatus } from '@prisma/client';
 import { PartialType } from '@nestjs/mapped-types';
 export class CreateScheduleDto {
-  @IsDateString() startAt: string;
-  @IsDateString() endAt: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
+  startAt: string;
 
-  @IsInt()
-  @IsOptional()
-  @Type(() => Number)
-  currentParticipants?: number;
+  @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
+  endAt: string;
+}
 
+export class UpdateScheduleDto extends PartialType(CreateScheduleDto) {
   @IsEnum(LessonScheduleStatus)
   @IsOptional()
   status?: LessonScheduleStatus;
 }
-
-export class UpdateScheduleDto extends PartialType(CreateScheduleDto) {}

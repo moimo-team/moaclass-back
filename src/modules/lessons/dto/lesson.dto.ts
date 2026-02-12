@@ -1,13 +1,18 @@
-import { IsString, IsInt, IsOptional, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
+  IsNotEmpty,
+} from 'class-validator';
 import { Level, LessonStatus } from '@prisma/client';
 import { PartialType } from '@nestjs/mapped-types';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class CreateLessonDto {
-  @IsInt()
-  @Type(() => Number)
-  teacherId: number;
-
   @IsInt()
   @Type(() => Number)
   lessonCategoryId: number;
@@ -27,6 +32,41 @@ export class CreateLessonDto {
 
   @IsString()
   curriculum: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @IsInt({ each: true })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => Number(item));
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return Array.isArray(parsed)
+            ? parsed.map((item) => Number(item))
+            : value;
+        } catch {
+          return value;
+        }
+      }
+
+      if (trimmed.includes(',')) {
+        return trimmed.split(',').map((item) => Number(item.trim()));
+      }
+
+      return [Number(trimmed)];
+    }
+
+    return value;
+  })
+  @IsNotEmpty({ each: true })
+  subCategoryIds: number[];
 
   @IsEnum(LessonStatus)
   @IsOptional()
@@ -48,14 +88,8 @@ export class CreateLessonDto {
   discountedPrice?: number;
 
   @IsInt()
-  @IsOptional()
   @Type(() => Number)
-  maxParticipants?: number;
-
-  @IsInt()
-  @IsOptional()
-  @Type(() => Number)
-  likes?: number;
+  maxParticipants: number;
 
   @IsInt()
   @Type(() => Number)
@@ -63,14 +97,6 @@ export class CreateLessonDto {
 
   @IsString()
   address: string;
-
-  @IsNumber()
-  @Type(() => Number)
-  latitude: number;
-
-  @IsNumber()
-  @Type(() => Number)
-  longitude: number;
 
   @IsString()
   detailAddress: string;

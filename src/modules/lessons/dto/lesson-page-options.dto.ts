@@ -1,88 +1,200 @@
 import {
   IsOptional,
-  IsString,
   IsEnum,
   IsNumber,
-  IsArray,
   IsBoolean,
+  IsArray,
+  Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PageOptionsDto } from '../../common/dto/page-options.dto';
 import { Level, LessonStatus } from '@prisma/client';
 
 export enum LessonSort {
-  NEW = 'NEW', // 최신순
-  UPDATE = 'UPDATE', // 업데이트순
-  DEADLINE = 'DEADLINE', // 마감 임박순
-  PRICE_ASC = 'PRICE_ASC', // 가격 오름차순
-  PRICE_DESC = 'PRICE_DESC', // 가격 내림차순
-  RATE = 'RATE', // 평점 높은순
-  LIKES = 'LIKES', // 좋아요 많은순
+  LATEST = 'LATEST',
+  NEW = 'NEW',
+  UPDATE = 'UPDATE',
+  DEADLINE = 'DEADLINE',
+  PRICE_ASC = 'PRICE_ASC',
+  PRICE_DESC = 'PRICE_DESC',
+  RATE = 'RATE',
+  LIKES = 'LIKES',
 }
 
 export enum LessonDay {
-  WEEKDAY = 'WEEKDAY', // 월~금
-  SATURDAY = 'SATURDAY', // 토요일
-  WEEKEND = 'WEEKEND', // 토/일
+  WEEKDAY = 'WEEKDAY',
+  SATURDAY = 'SATURDAY',
+  SUNDAY = 'SUNDAY',
 }
 
 export class LessonPageOptionsDto extends PageOptionsDto {
   @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @Transform(({ value }): number[] | undefined => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => Number(v));
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((v) => Number(v));
+    }
+    return [Number(value)];
+  })
+  regionId?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @Transform(({ value }): number[] | undefined => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => Number(v));
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((v) => Number(v));
+    }
+    return [Number(value)];
+  })
+  categoryId?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @Transform(({ value }): number[] | undefined => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => Number(v));
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((v) => Number(v));
+    }
+    return [Number(value)];
+  })
+  subCategoryId?: number[];
+
+  @IsOptional()
   @IsEnum(LessonSort)
-  @Transform(({ value }) => value ?? LessonSort.NEW)
+  @Transform(({ value }): LessonSort => value ?? LessonSort.LATEST)
   sort?: LessonSort;
 
   @IsOptional()
-  @IsNumber()
-  @Transform(({ value }) => (value ? Number(value) : undefined))
-  categoryId?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Transform(({ value }) => (value ? Number(value) : undefined))
-  regionId?: number;
-
-  @IsOptional()
-  @IsString()
-  level?: Level;
+  @IsArray()
+  @IsEnum(Level, { each: true })
+  @Transform(({ value }): Level[] | undefined => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const normalize = (v: string) => v.toUpperCase() as Level;
+    if (Array.isArray(value)) {
+      return value.map((v) => normalize(String(v)));
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map(normalize);
+    }
+    return [normalize(String(value))];
+  })
+  level?: Level[];
 
   @IsOptional()
   @IsEnum(LessonDay, { each: true })
-  @Transform(({ value }) =>
-    Array.isArray(value) ? value : value ? [value] : [],
-  )
+  @Transform(({ value }): LessonDay[] | undefined => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const normalize = (v: string) => v.toUpperCase() as LessonDay;
+    if (Array.isArray(value)) {
+      return value.map((v) => normalize(String(v)));
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map(normalize);
+    }
+    return [normalize(String(value))];
+  })
   days?: LessonDay[];
 
   @IsOptional()
   @IsNumber()
-  @Transform(({ value }) => (value ? Number(value) : undefined))
+  @Transform(({ value }): number | undefined =>
+    value ? Number(value) : undefined,
+  )
   minParticipants?: number;
 
   @IsOptional()
   @IsNumber()
-  @Transform(({ value }) => (value ? Number(value) : undefined))
+  @Transform(({ value }): number | undefined =>
+    value ? Number(value) : undefined,
+  )
   maxParticipants?: number;
 
   @IsOptional()
-  @IsString()
-  timeRange?: string; // "09:00-18:00"
+  @Matches(/^\d{1,2}-\d{1,2}$/)
+  timeRange?: string;
 
   @IsOptional()
   @IsNumber()
-  @Transform(({ value }) => (value ? Number(value) : undefined))
+  @Transform(({ value }): number | undefined =>
+    value ? Number(value) : undefined,
+  )
   minPrice?: number;
 
   @IsOptional()
   @IsNumber()
-  @Transform(({ value }) => (value ? Number(value) : undefined))
+  @Transform(({ value }): number | undefined =>
+    value ? Number(value) : undefined,
+  )
   maxPrice?: number;
 
   @IsOptional()
-  @IsEnum(LessonStatus)
-  status?: LessonStatus;
+  @IsArray()
+  @IsEnum(LessonStatus, { each: true })
+  @Transform(({ value }): LessonStatus[] | undefined => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const normalize = (v: string) => v.toUpperCase() as LessonStatus;
+    if (Array.isArray(value)) {
+      return value.map((v) => normalize(String(v)));
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map(normalize);
+    }
+    return [normalize(String(value))];
+  })
+  status?: LessonStatus[];
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
   @IsBoolean()
+  @Transform(({ value }): boolean => value === 'true' || value === true)
   finishedFilter?: boolean = false;
 }
