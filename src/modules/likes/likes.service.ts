@@ -34,7 +34,7 @@ export class LikesService {
         await tx.lesson.update({
           where: { id: lessonId },
           data: {
-            likes: { increment: 1 },
+            likeCount: { increment: 1 },
           },
         });
 
@@ -67,7 +67,7 @@ export class LikesService {
         await tx.lesson.update({
           where: { id: lessonId },
           data: {
-            likes: { decrement: 1 },
+            likeCount: { decrement: 1 },
           },
         });
       });
