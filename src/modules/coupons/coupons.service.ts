@@ -57,24 +57,37 @@ export class CouponsService {
 
   // 5. 유저가 가진 쿠폰 조회
   async getUserCoupons(userId: number) {
-    console.log(userId);
+    const now = new Date();
 
     const userCoupons = await this.prisma.userCoupon.findMany({
       where: { userId },
       include: { coupon: true },
     });
 
-    return userCoupons.map((uc) => ({
-      id: uc.coupon.id,
-      code: uc.coupon.code,
-      description: uc.coupon.description,
-      discountType: uc.coupon.discountType,
-      discountValue: uc.coupon.discountValue,
-      validFrom: uc.coupon.validFrom,
-      validUntil: uc.coupon.validUntil,
-      isUsed: uc.isUsed,
-      usedAt: uc.usedAt,
-      issuedAt: uc.issuedAt,
-    }));
+    return userCoupons.map((uc) => {
+      let status: 'USED' | 'AVAILABLE' | 'EXPIRED';
+
+      if (uc.isUsed) {
+        status = 'USED';
+      } else if (uc.coupon.validUntil && uc.coupon.validUntil < now) {
+        status = 'EXPIRED';
+      } else {
+        status = 'AVAILABLE';
+      }
+
+      return {
+        id: uc.coupon.id,
+        code: uc.coupon.code,
+        description: uc.coupon.description,
+        discountType: uc.coupon.discountType,
+        discountValue: uc.coupon.discountValue,
+        validFrom: uc.coupon.validFrom,
+        validUntil: uc.coupon.validUntil,
+        isUsed: uc.isUsed,
+        usedAt: uc.usedAt,
+        issuedAt: uc.issuedAt,
+        status,
+      };
+    });
   }
 }

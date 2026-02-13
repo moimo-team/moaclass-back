@@ -18,7 +18,7 @@ export class CouponsController {
   constructor(private readonly couponsService: CouponsService) {}
 
   @UseGuards(JwtAuthGuard)
-  @Get('my')
+  @Get('me')
   async getMyCoupons(@Req() req: Request & { user: JwtPayload }) {
     const userId = req.user.id;
     return this.couponsService.getUserCoupons(Number(userId));
@@ -50,8 +50,12 @@ export class CouponsController {
     return this.couponsService.createCoupon(body);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('issue')
-  async issueCoupon(@Body() body: { userId: number; couponId: number }) {
+  async issueCoupon(
+    @Req() req: Request & { user: JwtPayload },
+    @Body() body: { userId: number; couponId: number },
+  ) {
     try {
       return await this.couponsService.issueCoupon(body.userId, body.couponId);
     } catch (error) {

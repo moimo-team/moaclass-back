@@ -29,10 +29,14 @@ export class PaymentsController {
 
   @Post('calculate')
   async calculateFinalPrice(
+    @Req() req: Request & { user: JwtPayload },
     @Body() body: { scheduleId: number; quantity: number; couponId?: number },
   ) {
+    const userId = req.user.id;
+
     const { scheduleId, quantity, couponId } = body;
     return this.paymentsService.calculateFinalPrice(
+      userId,
       scheduleId,
       quantity,
       couponId,
@@ -40,12 +44,12 @@ export class PaymentsController {
   }
 
   // 결제 상세 조회
-  @Get('detail/:transactionId')
+  @Get('detail/:enrollmentId')
   async getPaymentDetail(
     @Req() req: Request & { user: JwtPayload },
-    @Param('transactionId') transactionId: number,
+    @Param('enrollmentId') enrollmentId: number,
   ) {
     const userId = req.user.id;
-    return this.paymentsService.getPaymentDetail(transactionId, userId);
+    return this.paymentsService.getPaymentDetail(enrollmentId, userId);
   }
 }

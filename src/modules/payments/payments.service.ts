@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentDetailDto } from './dto/payments.dto';
-import { TransactionStatus } from '@prisma/client';
+
 @Injectable()
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -47,7 +47,7 @@ export class PaymentsService {
 
     const coupons = availableCoupons.map((uc) => ({
       id: uc.coupon.id,
-      name: uc.coupon.description ?? uc.coupon.code,
+      description: uc.coupon.description,
       discountType: uc.coupon.discountType,
       discountValue: uc.coupon.discountValue,
       valid_until: uc.coupon.validUntil,
@@ -81,6 +81,7 @@ export class PaymentsService {
     };
   }
   async calculateFinalPrice(
+    userId: number,
     scheduleId: number,
     quantity: number,
     couponId?: number,
@@ -112,7 +113,7 @@ export class PaymentsService {
 
     const finalPrice = subtotal - couponDiscount;
 
-    const user = await this.prisma.user.findUnique({ where: { id: 1 } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const canPay = (user?.point ?? 0) >= finalPrice;
 
     return {
@@ -124,55 +125,79 @@ export class PaymentsService {
     };
   }
   async getPaymentDetail(
-    transactionId: number,
+    enrollmentId: number,
     userId: number,
   ): Promise<PaymentDetailDto> {
-    const transaction = await this.prisma.pointTransaction.findFirst({
-      where: { id: transactionId, userId },
+    // find the enrollment with all related transactions (USE and REFUND)
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
       include: {
-        lesson: { include: { teacher: true } },
-        coupon: true,
+        schedule: {
+          include: {
+            lesson: {
+              include: { teacher: { include: { teacherProfile: true } } },
+            },
+          },
+        },
+        transactions: { include: { coupon: true } },
       },
     });
 
-    if (!transaction) {
+    if (!enrollment || enrollment.userId !== userId) {
       throw new NotFoundException('결제 내역을 찾을 수 없습니다.');
     }
 
-    const amount = transaction.amount; // 최종 결제 금액
-    let originPrice = amount;
-    let discountedAmount = 0;
+    const { schedule, originPrice, discountAmount, finalPrice, quantity } =
+      enrollment;
 
-    if (transaction.coupon) {
-      if (transaction.coupon.discountType === 'FIXED') {
-        originPrice = amount + transaction.coupon.discountValue;
-        discountedAmount = transaction.coupon.discountValue;
-      } else if (transaction.coupon.discountType === 'PERCENT') {
-        originPrice = Math.floor(
-          amount / (1 - transaction.coupon.discountValue / 100),
-        );
-        discountedAmount = originPrice - amount;
-      }
+    // find payment and refund transactions
+    const useTx = (enrollment.transactions ?? []).find((t) => t.type === 'USE');
+    const refundTx = (enrollment.transactions ?? []).find(
+      (t) => t.type === 'REFUND',
+    );
+
+    if (!useTx) {
+      throw new NotFoundException('결제 내역을 찾을 수 없습니다.');
     }
+    console.log('선생이름', schedule.lesson.teacher.teacherProfile?.nickname);
 
     const detail: PaymentDetailDto = {
-      orderId: transaction.id,
-      lessonName: transaction.lesson?.title,
-      teacherName: transaction.lesson?.teacher.nickname,
-      originPrice,
-      discountedAmount,
-      amount,
-      paymentDate: transaction.createdAt,
-      status: transaction.status,
+      orderId: useTx.id,
+      transactionStatus: useTx.status,
+      paymentDate: useTx.createdAt,
+      classInfo: {
+        title: schedule.lesson.title,
+        teacherName:
+          schedule.lesson.teacher.teacherProfile?.nickname ?? '알 수 없음',
+        startAt: schedule.startAt,
+        endAt: schedule.endAt,
+      },
+      paymentInfo: {
+        originPrice,
+        discountAmount,
+        finalPrice,
+        quantity,
+        coupon:
+          useTx && useTx.coupon
+            ? {
+                id: useTx.coupon.id,
+                name: useTx.coupon.description ?? '',
+                discountType: useTx.coupon.discountType,
+                discountValue: useTx.coupon.discountValue,
+              }
+            : null,
+      },
+      refundInfo: refundTx
+        ? {
+            deductedAmount: finalPrice - refundTx.amount,
+            refundAmount: refundTx.amount,
+            paidAmount: finalPrice,
+            refundDate: refundTx.createdAt,
+            reason: refundTx.reason ?? '수강 취소 환불',
+            detailReason: refundTx.detailReason ?? '',
+          }
+        : null,
     };
-
-    // 환불 상태일 경우 추가 정보 포함
-    if (transaction.status === TransactionStatus.CANCELLED) {
-      detail.reason = transaction.reason ?? '';
-      detail.detailReason = transaction.detailReason ?? '';
-      detail.refundAmount = transaction.amount;
-      detail.refundDate = transaction.updatedAt;
-    }
 
     return detail;
   }

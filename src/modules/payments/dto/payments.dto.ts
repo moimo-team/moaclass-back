@@ -1,16 +1,34 @@
 export class PaymentDetailDto {
   orderId: number;
-  lessonName?: string;
-  teacherName?: string;
-  originPrice: number;
-  discountedAmount: number;
-  amount: number;
+  transactionStatus: string; // COMPLETED, PENDING, FAILED, CANCELED
   paymentDate: Date;
-  status: string;
 
-  // 환불 상태일 경우 추가 필드
-  reason?: string;
-  detailReason?: string;
-  refundAmount?: number;
-  refundDate?: Date;
+  classInfo: {
+    title: string;
+    teacherName: string;
+    startAt: Date;
+    endAt: Date;
+  };
+
+  paymentInfo: {
+    originPrice: number;
+    discountAmount: number;
+    finalPrice: number;
+    quantity: number;
+    coupon: {
+      id: number;
+      name: string;
+      discountType: string;
+      discountValue: number;
+    } | null;
+  };
+
+  refundInfo?: {
+    deductedAmount: number;
+    refundAmount: number;
+    paidAmount: number;
+    refundDate: Date;
+    reason: string;
+    detailReason: string;
+  } | null;
 }

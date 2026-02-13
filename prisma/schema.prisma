@@ -43,14 +43,14 @@ enum NotificationType {
   PARTICIPATION_REQUEST
   PARTICIPATION_ACCEPTED
   PARTICIPATION_REJECTED
-  PARTICIPATION_CANCELLED
+  PARTICIPATION_CANCELED
   MEETING_DELETED
 
   COMMENT_ON_LESSON
   REPLY_ON_COMMENT
   PAYMENT_SUCCESS
-  PAYMENT_CANCELLED
-  LESSON_CANCELLED
+  PAYMENT_CANCELED
+  LESSON_CANCELED
   REMINDER_24H
   REMINDER_1H
   REVIEW_REQUEST
@@ -65,14 +65,16 @@ enum ProviderType {
 enum TransactionStatus {
   PENDING
   COMPLETED
-  CANCELLED
+  CANCELED
   FAILED
 }
 
 enum PointType {
-  CHARGE
-  USE
-  REFUND
+  CHARGE    // 학생 포인트 충전
+  USE       // 학생 포인트 사용 (결제)
+  REFUND    // 학생 포인트 환불 (복원)
+  EARN      // 선생님 포인트 적립
+  DEDUCT    // 선생님 포인트 차감
 }
 
 enum DiscountType {
@@ -265,7 +267,6 @@ model Lesson {
   notifications     Notification[]
   reviews           Review[]
   wishlists         Wishlist[]
-  pointTransactions PointTransaction[]
 
   subCategories LessonSubCategoryMap[]
 
@@ -313,21 +314,46 @@ model LessonSubCategoryMap {
 }
 
 model Enrollment {
-  id                 Int                 @id @default(autoincrement())
-  userId             Int                 @map("user_id")
-  scheduleId         Int                 @map("schedule_id")
-  status             ParticipationStatus
-  checkedIn          Attendance          @default(PENDING) @map("checked_in")
-  pointTransactionId Int                 @map("point_transactions")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at")
+  id           Int               @id @default(autoincrement())
+  userId       Int               @map("user_id")
+  scheduleId   Int               @map("schedule_id")
+  status       ParticipationStatus
+  checkedIn    Attendance        @default(PENDING) @map("checked_in")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  // 결제 상세 필드
+  originPrice     Int
+  discountAmount  Int
+  finalPrice      Int
+  quantity        Int @default(1)
 
   user        User             @relation(fields: [userId], references: [id])
   schedule    LessonSchedule   @relation(fields: [scheduleId], references: [id])
-  transaction PointTransaction @relation(fields: [pointTransactionId], references: [id])
+  transactions PointTransaction[] // ✅ 여러 트랜잭션 연결
 
   @@unique([userId, scheduleId])
   @@map("enrollments")
+}
+
+model PointTransaction {
+  id           Int               @id @default(autoincrement())
+  userId       Int               @map("user_id")
+  enrollmentId Int?              @map("enrollment_id") // ✅ Enrollment와 연결
+  couponId     Int?              @map("coupon_id")
+  amount       Int
+  type         PointType
+  status       TransactionStatus
+  reason       String?           @map("reason")
+  detailReason String?           @map("detail_reason")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  enrollment  Enrollment?  @relation(fields: [enrollmentId], references: [id])
+  coupon      Coupon?      @relation(fields: [couponId], references: [id])
+
+  @@map("point_transactions")
 }
 
 model Notification {
@@ -391,28 +417,6 @@ model Wishlist {
   @@map("wishlists")
 }
 
-model PointTransaction {
-  id        Int               @id @default(autoincrement())
-  userId    Int               @map("user_id")
-  lessonId  Int?               @map("lesson_id") //충전의 경우 필요없음
-  couponId  Int?              @map("coupon_id")
-  amount    Int
-  type      PointType
-  status    TransactionStatus
-  reason        String?       @map("reason")         
-  detailReason  String?       @map("detail_reason")  
-
-  createdAt DateTime          @default(now()) @map("created_at")
-  updatedAt DateTime          @default(now()) @map("updated_at")
-
-  user   User    @relation(fields: [userId], references: [id])
-  lesson Lesson?  @relation(fields: [lessonId], references: [id])
-  coupon Coupon? @relation(fields: [couponId], references: [id])
-
-  enrollments Enrollment[]
-
-  @@map("point_transactions")
-}
 
 model Coupon {
   id            Int          @id @default(autoincrement())

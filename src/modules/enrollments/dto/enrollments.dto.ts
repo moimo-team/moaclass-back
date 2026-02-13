@@ -18,5 +18,10 @@ export class CreateEnrollmentDto {
   @IsOptional()
   @IsInt()
   @Type(() => Number)
+  quantity?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
   couponId?: number;
 }
