@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  IsOptional,
+} from 'class-validator';
 
 export class UpdateMomentoDto {
   @IsString()

@@ -65,7 +65,9 @@ export class LessonSchedulesService {
         );
       }
 
-      const durationSec = Math.floor((endAt.getTime() - startAt.getTime()) / 1000);
+      const durationSec = Math.floor(
+        (endAt.getTime() - startAt.getTime()) / 1000,
+      );
       if (durationSec !== lesson.durationSec) {
         throw new BadRequestException(
           `${index + 1}번째 일정 시간은 클래스 시간(${Math.floor(
@@ -83,10 +85,14 @@ export class LessonSchedulesService {
     });
 
     const uniqueTimeKeys = new Set(
-      rows.map((row) => `${row.startAt.toISOString()}-${row.endAt.toISOString()}`),
+      rows.map(
+        (row) => `${row.startAt.toISOString()}-${row.endAt.toISOString()}`,
+      ),
     );
     if (uniqueTimeKeys.size !== rows.length) {
-      throw new BadRequestException('요청 본문에 중복된 일정이 포함되어 있습니다.');
+      throw new BadRequestException(
+        '요청 본문에 중복된 일정이 포함되어 있습니다.',
+      );
     }
 
     try {
@@ -99,7 +105,9 @@ export class LessonSchedulesService {
           throw new NotFoundException('연결하려는 클래스를 찾을 수 없습니다.');
         }
         if (error.code === 'P2002') {
-          throw new BadRequestException('이미 존재하는 일정이 포함되어 있습니다.');
+          throw new BadRequestException(
+            '이미 존재하는 일정이 포함되어 있습니다.',
+          );
         }
       }
 
