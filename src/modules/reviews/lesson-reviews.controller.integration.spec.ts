@@ -168,6 +168,7 @@ describe('LessonReviewsController (integration, real DB)', () => {
     expect(body.meta.page).toBe(1);
     expect(body.meta.limit).toBe(6);
     expect(body.data).toHaveLength(6);
+    expect(body.data[0]?.lessonTitle).toBe(lesson.title);
     expect(body.data[0]?.content).toBe('리뷰 7');
     expect(body.data[5]?.content).toBe('리뷰 2');
   });

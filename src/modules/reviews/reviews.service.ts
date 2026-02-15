@@ -123,7 +123,7 @@ export class ReviewsService {
         id: lessonId,
         status: { not: 'DELETED' },
       },
-      select: { id: true },
+      select: { id: true, title: true },
     });
 
     if (!lesson) {
@@ -178,12 +178,132 @@ export class ReviewsService {
         return {
           id: review.id,
           lessonId: review.lessonId,
+          lessonTitle: lesson.title,
           userId: review.userId,
           rating: review.rating,
           content: review.content,
           ...imageMap,
         };
       });
+
+      return new PageDto(data, new PageMetaDto(totalCount, page, limit));
+    } catch {
+      throw new InternalServerErrorException(
+        '리뷰 조회 중 오류가 발생했습니다.',
+      );
+    }
+  }
+
+  async getLatestReviewsByTeacher(
+    teacherUserId: number,
+    pageOptionsDto: PageOptionsDto,
+  ) {
+    const page = pageOptionsDto.page ?? 1;
+    const limit = pageOptionsDto.limit ?? 6;
+    const skip = (page - 1) * limit;
+
+    try {
+      const [totalCount, reviews] = await Promise.all([
+        this.prisma.review.count({
+          where: {
+            lesson: {
+              userId: teacherUserId,
+              status: { not: 'DELETED' },
+            },
+          },
+        }),
+        this.prisma.review.findMany({
+          where: {
+            lesson: {
+              userId: teacherUserId,
+              status: { not: 'DELETED' },
+            },
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            lessonId: true,
+            lesson: {
+              select: {
+                title: true,
+              },
+            },
+            userId: true,
+            rating: true,
+            content: true,
+            representativeImage: true,
+          },
+        }),
+      ]);
+
+      const data = reviews.map((review) => ({
+        id: review.id,
+        lessonId: review.lessonId,
+        lessonTitle: review.lesson.title,
+        userId: review.userId,
+        rating: review.rating,
+        content: review.content,
+        representativeImage: review.representativeImage,
+      }));
+
+      return new PageDto(data, new PageMetaDto(totalCount, page, limit));
+    } catch {
+      throw new InternalServerErrorException(
+        '리뷰 조회 중 오류가 발생했습니다.',
+      );
+    }
+  }
+
+  async getLatestReviews(pageOptionsDto: PageOptionsDto) {
+    const page = pageOptionsDto.page ?? 1;
+    const limit = pageOptionsDto.limit ?? 6;
+    const skip = (page - 1) * limit;
+
+    try {
+      const [totalCount, reviews] = await Promise.all([
+        this.prisma.review.count({
+          where: {
+            lesson: {
+              status: { not: 'DELETED' },
+            },
+          },
+        }),
+        this.prisma.review.findMany({
+          where: {
+            lesson: {
+              status: { not: 'DELETED' },
+            },
+          },
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            lessonId: true,
+            lesson: {
+              select: {
+                title: true,
+              },
+            },
+            userId: true,
+            rating: true,
+            content: true,
+            representativeImage: true,
+          },
+        }),
+      ]);
+
+      const data = reviews.map((review) => ({
+        id: review.id,
+        lessonId: review.lessonId,
+        lessonTitle: review.lesson.title,
+        userId: review.userId,
+        rating: review.rating,
+        content: review.content,
+        representativeImage: review.representativeImage,
+      }));
 
       return new PageDto(data, new PageMetaDto(totalCount, page, limit));
     } catch {
@@ -207,6 +327,11 @@ export class ReviewsService {
       select: {
         id: true,
         lessonId: true,
+        lesson: {
+          select: {
+            title: true,
+          },
+        },
         rating: true,
         content: true,
         representativeImage: true,
@@ -250,6 +375,7 @@ export class ReviewsService {
     return {
       id: review.id,
       lessonId: review.lessonId,
+      lessonTitle: review.lesson.title,
       rating: review.rating,
       content: review.content,
       ...imageMap,

@@ -251,6 +251,7 @@ describe('ReviewsService create (integration, real DB)', () => {
     expect(result).toEqual({
       id: review.id,
       lessonId: lesson.id,
+      lessonTitle: lesson.title,
       rating: 4.5,
       content: '조회 테스트 리뷰',
       image1: 'https://example.com/review-representative.png',
@@ -337,5 +338,93 @@ describe('ReviewsService create (integration, real DB)', () => {
     await expect(
       service.getLatestReviewsByLesson(lesson.id, { page: 1, limit: 6 }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('getLatestReviewsByTeacher: 특정 선생님이 받은 최신 리뷰를 페이지네이션 조회한다', async () => {
+    const { user: teacherA, lesson: lessonA } =
+      await createLessonOwnerAndLesson('9a');
+    const { user: teacherB, lesson: lessonB } =
+      await createLessonOwnerAndLesson('9b');
+
+    for (let i = 1; i <= 7; i += 1) {
+      const review = await prisma.review.create({
+        data: {
+          userId: teacherA.id,
+          lessonId: lessonA.id,
+          rating: 4.0 + i * 0.1,
+          content: `A 리뷰 ${i}`,
+          representativeImage:
+            i % 2 === 0 ? `https://example.com/ta_${i}.png` : null,
+        },
+      });
+      reviewIds.push(review.id);
+    }
+
+    const otherTeacherReview = await prisma.review.create({
+      data: {
+        userId: teacherB.id,
+        lessonId: lessonB.id,
+        rating: 5,
+        content: 'B 리뷰 1',
+        representativeImage: 'https://example.com/tb_1.png',
+      },
+    });
+    reviewIds.push(otherTeacherReview.id);
+
+    const page1 = await service.getLatestReviewsByTeacher(teacherA.id, {
+      page: 1,
+      limit: 6,
+    });
+
+    expect(page1.meta.totalCount).toBe(7);
+    expect(page1.data).toHaveLength(6);
+    expect(page1.data[0]?.content).toBe('A 리뷰 7');
+    expect(page1.data[0]?.lessonTitle).toBe(lessonA.title);
+    expect(page1.data[0]).toHaveProperty('representativeImage');
+    expect(page1.data[0]).not.toHaveProperty('image2');
+  });
+
+  it('getLatestReviews: 전체 최신 리뷰를 페이지네이션 조회한다', async () => {
+    const { user: teacherA, lesson: lessonA } =
+      await createLessonOwnerAndLesson('10a');
+    const { user: teacherB, lesson: lessonB } =
+      await createLessonOwnerAndLesson('10b');
+
+    for (let i = 1; i <= 4; i += 1) {
+      const reviewA = await prisma.review.create({
+        data: {
+          userId: teacherA.id,
+          lessonId: lessonA.id,
+          rating: 4.0 + i * 0.1,
+          content: `전체 A 리뷰 ${i}`,
+          representativeImage: `https://example.com/all_a_${i}.png`,
+        },
+      });
+      reviewIds.push(reviewA.id);
+    }
+
+    for (let i = 1; i <= 3; i += 1) {
+      const reviewB = await prisma.review.create({
+        data: {
+          userId: teacherB.id,
+          lessonId: lessonB.id,
+          rating: 3.0 + i * 0.1,
+          content: `전체 B 리뷰 ${i}`,
+          representativeImage: `https://example.com/all_b_${i}.png`,
+        },
+      });
+      reviewIds.push(reviewB.id);
+    }
+
+    const page1 = await service.getLatestReviews({
+      page: 1,
+      limit: 6,
+    });
+
+    expect(page1.meta.totalCount).toBe(7);
+    expect(page1.data).toHaveLength(6);
+    expect(page1.data[0]).toHaveProperty('lessonTitle');
+    expect(page1.data[0]).toHaveProperty('representativeImage');
+    expect(page1.data[0]).not.toHaveProperty('image2');
   });
 });

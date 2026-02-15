@@ -7,6 +7,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   Req,
   Res,
   UploadedFiles,
@@ -20,6 +21,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtPayload } from '../../auth/jwt-payload.interface';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { ReviewsService } from './reviews.service';
+import { PageOptionsDto } from '../common/dto/page-options.dto';
 
 type ReviewImageFieldKey =
   | 'image1'
@@ -38,6 +40,22 @@ type ReviewUploadFiles = Partial<
 @Controller('reviews')
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
+
+  @Get()
+  async getLatestReviews(
+    @Query() pageOptionsDto: PageOptionsDto,
+    @Res() res: express.Response,
+  ) {
+    try {
+      const result = await this.reviewsService.getLatestReviews(pageOptionsDto);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        return res.status(error.getStatus()).send();
+      }
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
+    }
+  }
 
   @Get('me/lessons/:lessonId/:reviewId')
   @UseGuards(JwtAuthGuard)
