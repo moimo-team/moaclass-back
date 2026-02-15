@@ -70,43 +70,11 @@ export class LessonsController {
 
   @UseGuards(JwtAuthGuard)
   @Delete(':lessonId')
-  async deleteLesson(@Param('lessonId') lessonId: string) {
-    return this.lessonsService.softDeleteLesson(lessonId);
-  }
-
-  // PUT /lesson/schedules/:scheduleId : 일정 수정
-  @Put('schedules/:scheduleId')
-  async updateSchedule(
-    @Param('scheduleId') scheduleId: string,
-    @Body() dto: UpdateScheduleDto,
+  @HttpCode(204)
+  async deleteLesson(
+    @Param('lessonId', ParseIntPipe) lessonId: number,
+    @Req() req: Request & { user: JwtPayload },
   ) {
-    return this.lessonsService.updateSchedule(scheduleId, dto);
+    await this.lessonsService.softDeleteLesson(req.user.id, lessonId);
   }
-  // POST /lessons/:lessonId/schedules : 일정 추가
-  @Post(':lessonId/schedules')
-  async addSchedule(@Param('lessonId') lessonId: string, @Body() body: any) {
-    const dto = plainToInstance(CreateScheduleDto, body);
-    return this.lessonsService.addSchedule(lessonId, dto);
-  }
-  // DELETE /lesson/schedules/:scheduleId : 일정 삭제
-  @Delete('schedules/:scheduleId')
-  async deleteSchedule(@Param('scheduleId') scheduleId: string) {
-    return this.lessonsService.deleteSchedule(scheduleId);
-  }
-
-  //   // POST /lessons/:lessonId/images : 갤러리 이미지 업로드
-  //   @Post(':lessonId/images')
-  //   @UseInterceptors(FileInterceptor('file'))
-  //   async uploadImage(
-  //     @Param('lessonId') lessonId: string,
-  //     @UploadedFile() file: Express.Multer.File,
-  //   ) {
-  //     return this.lessonsService.uploadImage(lessonId, file);
-  //   }
-
-  //   // DELETE /lesson/images/:imageId : 갤러리 이미지 삭제
-  //   @Delete('images/:imageId')
-  //   async deleteImage(@Param('imageId') imageId: string) {
-  //     return this.lessonsService.deleteImage(imageId);
-  //   }
 }
