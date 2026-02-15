@@ -212,4 +212,77 @@ describe('ReviewsService create (integration, real DB)', () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('findMyLessonReviewDetail: image1~image8 형태로 조회된다', async () => {
+    const { user, lesson } = await createLessonOwnerAndLesson('4');
+
+    const review = await prisma.review.create({
+      data: {
+        userId: user.id,
+        lessonId: lesson.id,
+        rating: 4.5,
+        content: '조회 테스트 리뷰',
+        representativeImage: 'https://example.com/review-representative.png',
+      },
+    });
+    reviewIds.push(review.id);
+
+    await prisma.reviewImage.createMany({
+      data: [
+        {
+          reviewId: review.id,
+          image: 'https://example.com/review-image-2.png',
+          sequence: 1,
+        },
+        {
+          reviewId: review.id,
+          image: 'https://example.com/review-image-8.png',
+          sequence: 7,
+        },
+      ],
+    });
+
+    const result = await service.findMyLessonReviewDetail(
+      user.id,
+      lesson.id,
+      review.id,
+    );
+
+    expect(result).toEqual({
+      id: review.id,
+      lessonId: lesson.id,
+      rating: 4.5,
+      content: '조회 테스트 리뷰',
+      image1: 'https://example.com/review-representative.png',
+      image2: 'https://example.com/review-image-2.png',
+      image3: null,
+      image4: null,
+      image5: null,
+      image6: null,
+      image7: null,
+      image8: 'https://example.com/review-image-8.png',
+    });
+    expect(result).not.toHaveProperty('createdAt');
+    expect(result).not.toHaveProperty('updatedAt');
+  });
+
+  it('findMyLessonReviewDetail: 본인/클래스/리뷰가 일치하지 않으면 NotFoundException을 던진다', async () => {
+    const { user: owner, lesson } = await createLessonOwnerAndLesson('5');
+    const { user: otherUser } = await createLessonOwnerAndLesson('6');
+
+    const review = await prisma.review.create({
+      data: {
+        userId: owner.id,
+        lessonId: lesson.id,
+        rating: 5,
+        content: '권한 테스트 리뷰',
+        representativeImage: null,
+      },
+    });
+    reviewIds.push(review.id);
+
+    await expect(
+      service.findMyLessonReviewDetail(otherUser.id, lesson.id, review.id),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
 });

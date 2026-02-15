@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   HttpException,
   HttpStatus,
+  Param,
+  ParseIntPipe,
   Post,
   Req,
   Res,
@@ -36,6 +39,30 @@ type ReviewUploadFiles = Partial<
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
+  @Get('me/lessons/:lessonId/:reviewId')
+  @UseGuards(JwtAuthGuard)
+  async findMyLessonReviewDetail(
+    @Req() req: express.Request & { user: JwtPayload },
+    @Param('lessonId', ParseIntPipe) lessonId: number,
+    @Param('reviewId', ParseIntPipe) reviewId: number,
+    @Res() res: express.Response,
+  ) {
+    try {
+      const userId = req.user.id;
+      const review = await this.reviewsService.findMyLessonReviewDetail(
+        userId,
+        lessonId,
+        reviewId,
+      );
+      return res.status(HttpStatus.OK).json(review);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        return res.status(error.getStatus()).send();
+      }
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
+    }
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
@@ -65,7 +92,7 @@ export class ReviewsController {
       return res.status(HttpStatus.CREATED).send();
     } catch (error) {
       if (error instanceof HttpException) {
-        return res.status(error.getStatus()).json({ message: error.message });
+        return res.status(error.getStatus()).send();
       }
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
     }

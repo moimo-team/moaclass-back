@@ -110,4 +110,67 @@ export class ReviewsService {
       );
     }
   }
+
+  async findMyLessonReviewDetail(
+    userId: number,
+    lessonId: number,
+    reviewId: number,
+  ) {
+    const review = await this.prisma.review.findFirst({
+      where: {
+        id: reviewId,
+        userId,
+        lessonId,
+      },
+      select: {
+        id: true,
+        lessonId: true,
+        rating: true,
+        content: true,
+        representativeImage: true,
+        createdAt: true,
+        updatedAt: true,
+        images: {
+          select: {
+            id: true,
+            image: true,
+            sequence: true,
+          },
+          orderBy: {
+            sequence: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!review) {
+      throw new NotFoundException('해당 리뷰를 찾을 수 없습니다.');
+    }
+
+    const imageMap: Partial<Record<ReviewImageFieldKey, string | null>> = {
+      image1: review.representativeImage,
+      image2: null,
+      image3: null,
+      image4: null,
+      image5: null,
+      image6: null,
+      image7: null,
+      image8: null,
+    };
+
+    review.images.forEach((image) => {
+      const keyIndex = image.sequence + 1;
+      if (keyIndex < 2 || keyIndex > 8) return;
+      const key = `image${keyIndex}` as ReviewImageFieldKey;
+      imageMap[key] = image.image;
+    });
+
+    return {
+      id: review.id,
+      lessonId: review.lessonId,
+      rating: review.rating,
+      content: review.content,
+      ...imageMap,
+    };
+  }
 }
