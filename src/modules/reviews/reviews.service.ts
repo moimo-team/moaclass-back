@@ -1,0 +1,113 @@
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { UploadService } from '../upload/upload.service';
+import { CreateReviewDto } from './dto/create-review.dto';
+
+type ReviewImageFieldKey =
+  | 'image1'
+  | 'image2'
+  | 'image3'
+  | 'image4'
+  | 'image5'
+  | 'image6'
+  | 'image7'
+  | 'image8';
+
+type ReviewUploadFiles = Partial<
+  Record<ReviewImageFieldKey, Express.Multer.File[]>
+>;
+
+@Injectable()
+export class ReviewsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
+  ) {}
+
+  async create(userId: number, dto: CreateReviewDto, files: ReviewUploadFiles) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: dto.lessonId },
+      select: { id: true, status: true },
+    });
+
+    if (!lesson || lesson.status === 'DELETED') {
+      throw new NotFoundException('리뷰를 등록할 클래스를 찾을 수 없습니다.');
+    }
+
+    const orderedKeys: ReviewImageFieldKey[] = [
+      'image1',
+      'image2',
+      'image3',
+      'image4',
+      'image5',
+      'image6',
+      'image7',
+      'image8',
+    ];
+
+    const representativeFile = files.image1?.[0];
+    let representativeImage: string | null = null;
+
+    if (representativeFile) {
+      representativeImage = await this.uploadService.uploadFile(
+        'review',
+        representativeFile,
+      );
+    }
+
+    const reviewImages: Array<{ image: string; sequence: number }> = [];
+
+    for (let i = 1; i < orderedKeys.length; i += 1) {
+      const key = orderedKeys[i];
+      const file = files[key]?.[0];
+      if (!file) continue;
+
+      const imageUrl = await this.uploadService.uploadFile('review', file);
+      reviewImages.push({
+        image: imageUrl,
+        // image2 -> 1, image3 -> 2 ... image8 -> 7
+        sequence: i,
+      });
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const review = await tx.review.create({
+          data: {
+            userId,
+            lessonId: dto.lessonId,
+            rating: dto.rating,
+            content: dto.content,
+            representativeImage,
+          },
+        });
+
+        if (reviewImages.length > 0) {
+          await tx.reviewImage.createMany({
+            data: reviewImages.map((image) => ({
+              reviewId: review.id,
+              image: image.image,
+              sequence: image.sequence,
+            })),
+          });
+        }
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new NotFoundException('리뷰를 등록할 클래스를 찾을 수 없습니다.');
+      }
+
+      throw new InternalServerErrorException(
+        '리뷰 등록 중 오류가 발생했습니다.',
+      );
+    }
+  }
+}
