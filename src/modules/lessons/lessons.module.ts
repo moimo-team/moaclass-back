@@ -1,13 +1,16 @@
 import { Module } from '@nestjs/common';
 import { LessonsController } from './lessons.controller';
+import { LessonSchedulesController } from './lesson-schedules.controller';
 import { LessonsService } from './lessons.service';
+import { LessonSchedulesService } from './lesson-schedules.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadModule } from '../upload/upload.module';
 
 @Module({
   imports: [UploadModule],
-  controllers: [LessonsController],
-  providers: [LessonsService, PrismaService],
-  exports: [LessonsService], // 다른 모듈에서 사용할 수 있도록 export
+  controllers: [LessonsController, LessonSchedulesController],
+  providers: [LessonsService, LessonSchedulesService, PrismaService],
+
+  exports: [LessonsService, LessonSchedulesService],
 })
 export class LessonsModule {}

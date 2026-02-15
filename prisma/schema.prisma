@@ -112,7 +112,8 @@ model User {
   wishlists         Wishlist[]
   pointTransactions PointTransaction[]
   userCoupons       UserCoupon[]
-  lessons  Lesson[] @relation("UserLessons")
+  lessons           Lesson[]           @relation("UserLessons")
+
   @@map("users")
 }
 
@@ -227,7 +228,7 @@ model Participation {
 
 model Lesson {
   id               Int    @id @default(autoincrement())
-  userId        Int    @map("user_id")
+  userId           Int    @map("user_id")
   lessonCategoryId Int    @map("lesson_category_id")
   title            String @db.VarChar(50)
   description      String @db.Text
@@ -240,7 +241,7 @@ model Lesson {
   discountRate    Int          @default(0) @map("discount_rate")
   discountedPrice Int          @default(0) @map("discounted_price")
 
-  maxParticipants     Int?   @map("max_participants")
+  maxParticipants     Int    @map("max_participants")
   representativeImage String @map("representative_image")
   likeCount           Int    @default(0) @map("like_count")
 
@@ -259,14 +260,15 @@ model Lesson {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  teacher           User                @relation(fields: [userId], references: [id], name: "UserLessons")
-  lessonCategory    LessonCategory     @relation(fields: [lessonCategoryId], references: [id])
-  region            Region             @relation(fields: [regionId], references: [id])
+  teacher           User                 @relation("UserLessons", fields: [userId], references: [id])
+  lessonCategory    LessonCategory       @relation(fields: [lessonCategoryId], references: [id])
+  region            Region               @relation(fields: [regionId], references: [id])
   images            LessonImage[]
   schedules         LessonSchedule[]
   notifications     Notification[]
   reviews           Review[]
   wishlists         Wishlist[]
+  pointTransactions PointTransaction[]
 
   subCategories LessonSubCategoryMap[]
 
@@ -381,7 +383,7 @@ model Review {
   userId              Int      @map("user_id")
   lessonId            Int      @map("lesson_id")
   representativeImage String?  @map("representative_image")
-  rating              Int
+  rating              Float
   content             String
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
