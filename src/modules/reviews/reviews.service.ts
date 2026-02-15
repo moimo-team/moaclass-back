@@ -7,6 +7,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { PageOptionsDto } from '../common/dto/page-options.dto';
+import { PageDto } from '../common/dto/page.dto';
+import { PageMetaDto } from '../common/dto/page-meta.dto';
 
 type ReviewImageFieldKey =
   | 'image1'
@@ -107,6 +110,85 @@ export class ReviewsService {
 
       throw new InternalServerErrorException(
         '리뷰 등록 중 오류가 발생했습니다.',
+      );
+    }
+  }
+
+  async getLatestReviewsByLesson(
+    lessonId: number,
+    pageOptionsDto: PageOptionsDto,
+  ) {
+    const lesson = await this.prisma.lesson.findFirst({
+      where: {
+        id: lessonId,
+        status: { not: 'DELETED' },
+      },
+      select: { id: true },
+    });
+
+    if (!lesson) {
+      throw new NotFoundException('리뷰를 조회할 클래스를 찾을 수 없습니다.');
+    }
+
+    const page = pageOptionsDto.page ?? 1;
+    const limit = pageOptionsDto.limit ?? 6;
+    const skip = (page - 1) * limit;
+
+    try {
+      const [totalCount, reviews] = await Promise.all([
+        this.prisma.review.count({
+          where: { lessonId },
+        }),
+        this.prisma.review.findMany({
+          where: { lessonId },
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            images: {
+              orderBy: { sequence: 'asc' },
+              select: {
+                sequence: true,
+                image: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      const data = reviews.map((review) => {
+        const imageMap: Partial<Record<ReviewImageFieldKey, string | null>> = {
+          image1: review.representativeImage,
+          image2: null,
+          image3: null,
+          image4: null,
+          image5: null,
+          image6: null,
+          image7: null,
+          image8: null,
+        };
+
+        review.images.forEach((image) => {
+          const keyIndex = image.sequence + 1;
+          if (keyIndex < 2 || keyIndex > 8) return;
+          const key = `image${keyIndex}` as ReviewImageFieldKey;
+          imageMap[key] = image.image;
+        });
+
+        return {
+          id: review.id,
+          lessonId: review.lessonId,
+          userId: review.userId,
+          rating: review.rating,
+          content: review.content,
+          ...imageMap,
+        };
+      });
+
+      return new PageDto(data, new PageMetaDto(totalCount, page, limit));
+    } catch {
+      throw new InternalServerErrorException(
+        '리뷰 조회 중 오류가 발생했습니다.',
       );
     }
   }

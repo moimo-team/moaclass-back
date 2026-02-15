@@ -285,4 +285,57 @@ describe('ReviewsService create (integration, real DB)', () => {
       service.findMyLessonReviewDetail(otherUser.id, lesson.id, review.id),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('getLatestReviewsByLesson: 최신순으로 페이지네이션 조회된다', async () => {
+    const { user, lesson } = await createLessonOwnerAndLesson('7');
+
+    for (let i = 1; i <= 7; i += 1) {
+      const review = await prisma.review.create({
+        data: {
+          userId: user.id,
+          lessonId: lesson.id,
+          rating: 4.0 + i * 0.1,
+          content: `리뷰 ${i}`,
+          representativeImage:
+            i % 2 === 0 ? `https://example.com/r${i}.png` : null,
+        },
+      });
+      reviewIds.push(review.id);
+    }
+
+    const page1 = await service.getLatestReviewsByLesson(lesson.id, {
+      page: 1,
+      limit: 6,
+    });
+
+    expect(page1.meta.totalCount).toBe(7);
+    expect(page1.meta.page).toBe(1);
+    expect(page1.meta.limit).toBe(6);
+    expect(page1.data).toHaveLength(6);
+    expect(page1.data[0]?.content).toBe('리뷰 7');
+    expect(page1.data[5]?.content).toBe('리뷰 2');
+
+    const page2 = await service.getLatestReviewsByLesson(lesson.id, {
+      page: 2,
+      limit: 6,
+    });
+    expect(page2.data).toHaveLength(1);
+    expect(page2.data[0]?.content).toBe('리뷰 1');
+  });
+
+  it('getLatestReviewsByLesson: 클래스가 없거나 삭제 상태면 NotFoundException을 던진다', async () => {
+    await expect(
+      service.getLatestReviewsByLesson(99999999, { page: 1, limit: 6 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    const { lesson } = await createLessonOwnerAndLesson('8');
+    await prisma.lesson.update({
+      where: { id: lesson.id },
+      data: { status: 'DELETED' },
+    });
+
+    await expect(
+      service.getLatestReviewsByLesson(lesson.id, { page: 1, limit: 6 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
