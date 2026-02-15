@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ReviewsService } from './reviews.service';
 
@@ -16,6 +20,9 @@ describe('ReviewsService create (integration, real DB)', () => {
   const lessonCategoryIds: number[] = [];
   const lessonIds: number[] = [];
   const reviewIds: number[] = [];
+  const scheduleIds: number[] = [];
+  const enrollmentIds: number[] = [];
+  const pointTransactionIds: number[] = [];
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) {
@@ -40,6 +47,27 @@ describe('ReviewsService create (integration, real DB)', () => {
         where: { id: { in: reviewIds } },
       });
       reviewIds.length = 0;
+    }
+
+    if (enrollmentIds.length > 0) {
+      await prisma.enrollment.deleteMany({
+        where: { id: { in: enrollmentIds } },
+      });
+      enrollmentIds.length = 0;
+    }
+
+    if (scheduleIds.length > 0) {
+      await prisma.lessonSchedule.deleteMany({
+        where: { id: { in: scheduleIds } },
+      });
+      scheduleIds.length = 0;
+    }
+
+    if (pointTransactionIds.length > 0) {
+      await prisma.pointTransaction.deleteMany({
+        where: { id: { in: pointTransactionIds } },
+      });
+      pointTransactionIds.length = 0;
     }
 
     if (lessonIds.length > 0) {
@@ -120,8 +148,56 @@ describe('ReviewsService create (integration, real DB)', () => {
     return { user, lesson };
   }
 
+  async function createAcceptedEnrollmentForLesson(
+    lessonId: number,
+    suffix: string,
+  ) {
+    const user = await prisma.user.create({
+      data: {
+        email: `${runKey}_reviewer_${suffix}@example.com`,
+        nickname: `${runKey}_reviewer_${suffix}`,
+        provider: 'GOOGLE',
+        providerId: `${runKey}_reviewer_provider_${suffix}`,
+      },
+    });
+    userIds.push(user.id);
+
+    const schedule = await prisma.lessonSchedule.create({
+      data: {
+        lessonId,
+        startAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        endAt: new Date(Date.now() + 25 * 60 * 60 * 1000),
+      },
+    });
+    scheduleIds.push(schedule.id);
+
+    const pointTransaction = await prisma.pointTransaction.create({
+      data: {
+        userId: user.id,
+        lessonId,
+        amount: -1000,
+        type: 'USE',
+        status: 'COMPLETED',
+      },
+    });
+    pointTransactionIds.push(pointTransaction.id);
+
+    const enrollment = await prisma.enrollment.create({
+      data: {
+        userId: user.id,
+        scheduleId: schedule.id,
+        status: 'ACCEPTED',
+        pointTransactionId: pointTransaction.id,
+      },
+    });
+    enrollmentIds.push(enrollment.id);
+
+    return { user, schedule, enrollment };
+  }
+
   it('이미지 없이 리뷰를 등록하면 대표이미지는 null로 저장된다', async () => {
-    const { user, lesson } = await createLessonOwnerAndLesson('1');
+    const { lesson } = await createLessonOwnerAndLesson('1');
+    const { user } = await createAcceptedEnrollmentForLesson(lesson.id, '1');
 
     await service.create(
       user.id,
@@ -144,7 +220,8 @@ describe('ReviewsService create (integration, real DB)', () => {
   });
 
   it('image1~image8 규칙으로 URL과 sequence가 저장된다', async () => {
-    const { user, lesson } = await createLessonOwnerAndLesson('2');
+    const { lesson } = await createLessonOwnerAndLesson('2');
+    const { user } = await createAcceptedEnrollmentForLesson(lesson.id, '2');
 
     uploadService.uploadFile
       .mockResolvedValueOnce('https://example.com/review-representative.png')
@@ -197,7 +274,8 @@ describe('ReviewsService create (integration, real DB)', () => {
   });
 
   it('삭제된 클래스 상태면 NotFoundException을 던진다', async () => {
-    const { user, lesson } = await createLessonOwnerAndLesson('3');
+    const { lesson } = await createLessonOwnerAndLesson('3');
+    const { user } = await createAcceptedEnrollmentForLesson(lesson.id, '3');
 
     await prisma.lesson.update({
       where: { id: lesson.id },
@@ -211,6 +289,66 @@ describe('ReviewsService create (integration, real DB)', () => {
         {},
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('create: 본인이 개설한 클래스에는 리뷰를 작성할 수 없다', async () => {
+    const { user: teacher, lesson } = await createLessonOwnerAndLesson('3_1');
+
+    await expect(
+      service.create(
+        teacher.id,
+        { lessonId: lesson.id, rating: 4, content: '자기 리뷰 테스트' },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('create: 클래스 참여자가 아니면 리뷰를 작성할 수 없다', async () => {
+    const { lesson } = await createLessonOwnerAndLesson('3_2');
+    const notEnrolledUser = await prisma.user.create({
+      data: {
+        email: `${runKey}_not_enrolled@example.com`,
+        nickname: `${runKey}_not_enrolled`,
+        provider: 'GOOGLE',
+        providerId: `${runKey}_not_enrolled_provider`,
+      },
+    });
+    userIds.push(notEnrolledUser.id);
+
+    await expect(
+      service.create(
+        notEnrolledUser.id,
+        { lessonId: lesson.id, rating: 4, content: '미참여 리뷰 테스트' },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('create: 같은 사용자는 같은 클래스에 리뷰를 1개만 작성할 수 있다', async () => {
+    const { lesson } = await createLessonOwnerAndLesson('3_3');
+    const { user } = await createAcceptedEnrollmentForLesson(lesson.id, '3_3');
+
+    await service.create(
+      user.id,
+      { lessonId: lesson.id, rating: 4.5, content: '첫 리뷰' },
+      {},
+    );
+
+    const created = await prisma.review.findFirst({
+      where: { userId: user.id, lessonId: lesson.id },
+      select: { id: true },
+    });
+    if (created) {
+      reviewIds.push(created.id);
+    }
+
+    await expect(
+      service.create(
+        user.id,
+        { lessonId: lesson.id, rating: 5, content: '중복 리뷰' },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('findMyLessonReviewDetail: image1~image8 형태로 조회된다', async () => {
@@ -429,11 +567,15 @@ describe('ReviewsService create (integration, real DB)', () => {
   });
 
   it('update: 전달된 rating/content만 수정하고 미전달 값은 유지한다', async () => {
-    const { user, lesson } = await createLessonOwnerAndLesson('11');
+    const { lesson } = await createLessonOwnerAndLesson('11');
+    const { user: reviewer } = await createAcceptedEnrollmentForLesson(
+      lesson.id,
+      '11',
+    );
 
     const review = await prisma.review.create({
       data: {
-        userId: user.id,
+        userId: reviewer.id,
         lessonId: lesson.id,
         rating: 3.5,
         content: '수정 전 내용',
@@ -451,7 +593,7 @@ describe('ReviewsService create (integration, real DB)', () => {
     });
 
     await service.update(
-      user.id,
+      reviewer.id,
       review.id,
       {
         content: '수정 후 내용',
@@ -481,11 +623,15 @@ describe('ReviewsService create (integration, real DB)', () => {
   });
 
   it('update: 전달된 image 키만 교체하고 미전달 이미지는 유지한다', async () => {
-    const { user, lesson } = await createLessonOwnerAndLesson('12');
+    const { lesson } = await createLessonOwnerAndLesson('12');
+    const { user: reviewer } = await createAcceptedEnrollmentForLesson(
+      lesson.id,
+      '12',
+    );
 
     const review = await prisma.review.create({
       data: {
-        userId: user.id,
+        userId: reviewer.id,
         lessonId: lesson.id,
         rating: 4,
         content: '이미지 수정 전',
@@ -521,7 +667,7 @@ describe('ReviewsService create (integration, real DB)', () => {
       }) as Express.Multer.File;
 
     await service.update(
-      user.id,
+      reviewer.id,
       review.id,
       {},
       {
@@ -573,6 +719,102 @@ describe('ReviewsService create (integration, real DB)', () => {
         review.id,
         {
           rating: 5,
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('update: 리뷰 작성자가 클래스 참여자가 아니면 ForbiddenException을 던진다', async () => {
+    const { lesson } = await createLessonOwnerAndLesson('15');
+    const reviewer = await prisma.user.create({
+      data: {
+        email: `${runKey}_reviewer_not_enrolled_15@example.com`,
+        nickname: `${runKey}_reviewer_not_enrolled_15`,
+        provider: 'GOOGLE',
+        providerId: `${runKey}_reviewer_not_enrolled_provider_15`,
+      },
+    });
+    userIds.push(reviewer.id);
+
+    const review = await prisma.review.create({
+      data: {
+        userId: reviewer.id,
+        lessonId: lesson.id,
+        rating: 4.5,
+        content: '사전 데이터',
+        representativeImage: null,
+      },
+    });
+    reviewIds.push(review.id);
+
+    await expect(
+      service.update(
+        reviewer.id,
+        review.id,
+        {
+          content: '수정 시도',
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('update: 클래스가 삭제 상태면 NotFoundException을 던진다', async () => {
+    const { lesson } = await createLessonOwnerAndLesson('16');
+    const { user: reviewer } = await createAcceptedEnrollmentForLesson(
+      lesson.id,
+      '16',
+    );
+
+    const review = await prisma.review.create({
+      data: {
+        userId: reviewer.id,
+        lessonId: lesson.id,
+        rating: 4.5,
+        content: '수정 대상',
+        representativeImage: null,
+      },
+    });
+    reviewIds.push(review.id);
+
+    await prisma.lesson.update({
+      where: { id: lesson.id },
+      data: { status: 'DELETED' },
+    });
+
+    await expect(
+      service.update(
+        reviewer.id,
+        review.id,
+        {
+          content: '수정 시도',
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('update: 본인이 개설한 클래스의 리뷰면 ForbiddenException을 던진다', async () => {
+    const { user: teacher, lesson } = await createLessonOwnerAndLesson('17');
+
+    const review = await prisma.review.create({
+      data: {
+        userId: teacher.id,
+        lessonId: lesson.id,
+        rating: 5,
+        content: '비정상 사전 데이터',
+        representativeImage: null,
+      },
+    });
+    reviewIds.push(review.id);
+
+    await expect(
+      service.update(
+        teacher.id,
+        review.id,
+        {
+          content: '수정 시도',
         },
         {},
       ),

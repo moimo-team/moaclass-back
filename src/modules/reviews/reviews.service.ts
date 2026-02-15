@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -37,11 +38,46 @@ export class ReviewsService {
   async create(userId: number, dto: CreateReviewDto, files: ReviewUploadFiles) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: dto.lessonId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, userId: true },
     });
 
     if (!lesson || lesson.status === 'DELETED') {
       throw new NotFoundException('리뷰를 등록할 클래스를 찾을 수 없습니다.');
+    }
+
+    if (lesson.userId === userId) {
+      throw new ForbiddenException(
+        '본인이 개설한 클래스에는 리뷰를 작성할 수 없습니다.',
+      );
+    }
+
+    const participated = await this.prisma.enrollment.findFirst({
+      where: {
+        userId,
+        status: 'ACCEPTED',
+        schedule: {
+          lessonId: dto.lessonId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!participated) {
+      throw new ForbiddenException(
+        '클래스에 참여한 사용자만 리뷰를 작성할 수 있습니다.',
+      );
+    }
+
+    const existingReview = await this.prisma.review.findFirst({
+      where: {
+        userId,
+        lessonId: dto.lessonId,
+      },
+      select: { id: true },
+    });
+
+    if (existingReview) {
+      throw new ConflictException('이미 해당 클래스에 리뷰를 작성했습니다.');
     }
 
     const orderedKeys: ReviewImageFieldKey[] = [
@@ -127,6 +163,7 @@ export class ReviewsService {
       select: {
         id: true,
         userId: true,
+        lessonId: true,
         representativeImage: true,
         images: {
           select: {
@@ -144,6 +181,38 @@ export class ReviewsService {
 
     if (review.userId !== userId) {
       throw new ForbiddenException('본인이 작성한 리뷰만 수정할 수 있습니다.');
+    }
+
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: review.lessonId },
+      select: { id: true, status: true, userId: true },
+    });
+
+    if (!lesson || lesson.status === 'DELETED') {
+      throw new NotFoundException('수정할 리뷰의 클래스를 찾을 수 없습니다.');
+    }
+
+    if (lesson.userId === userId) {
+      throw new ForbiddenException(
+        '본인이 개설한 클래스의 리뷰는 수정할 수 없습니다.',
+      );
+    }
+
+    const participated = await this.prisma.enrollment.findFirst({
+      where: {
+        userId,
+        status: 'ACCEPTED',
+        schedule: {
+          lessonId: review.lessonId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!participated) {
+      throw new ForbiddenException(
+        '클래스에 참여한 사용자만 리뷰를 수정할 수 있습니다.',
+      );
     }
 
     const orderedKeys: ReviewImageFieldKey[] = [
