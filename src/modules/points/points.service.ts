@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionStatus, PointType } from '@prisma/client';
 @Injectable()
@@ -13,7 +17,7 @@ export class PointsService {
     });
 
     if (!user) {
-      throw new Error('존재하지 않는 유저입니다.');
+      throw new NotFoundException('존재하지 않는 유저입니다.');
     }
 
     // 포인트 내역 조회 (enrollment -> schedule -> lesson, coupon)

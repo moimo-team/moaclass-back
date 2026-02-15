@@ -236,10 +236,10 @@ model Lesson {
   durationSec      Int    @map("duration_sec")
   curriculum       String @db.Text
 
-  status          LessonStatus @default(ACTIVE)
-  price           Int          @default(0)
-  discountRate    Int          @default(0) @map("discount_rate")
-  discountedPrice Int          @default(0) @map("discounted_price")
+  status       LessonStatus @default(ACTIVE)
+  price        Int          @default(0)
+  discountRate Int          @default(0) @map("discount_rate")
+  discountedPrice Int       @default(0) @map("discounted_price")
 
   maxParticipants     Int    @map("max_participants")
   representativeImage String @map("representative_image")
@@ -268,7 +268,7 @@ model Lesson {
   notifications     Notification[]
   reviews           Review[]
   wishlists         Wishlist[]
-  pointTransactions PointTransaction[]
+
 
   subCategories LessonSubCategoryMap[]
 
@@ -440,15 +440,17 @@ model Coupon {
 }
 
 model UserCoupon {
-  id       Int       @id @default(autoincrement())
-  userId   Int       @map("user_id")
-  couponId Int       @map("coupon_id")
-  isUsed   Boolean   @default(false) @map("is_used")
-  usedAt   DateTime? @map("used_at")
-  issuedAt DateTime  @default(now()) @map("issued_at")
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  couponId  Int       @map("coupon_id")
+  isUsed    Boolean   @default(false) @map("is_used")
+  usedAt    DateTime? @map("used_at")
+  issuedAt  DateTime  @default(now()) @map("issued_at")
+  expiresAt DateTime? @map("expires_at")  // ✅ NEW: 사용자별 쿠폰 만료 시간
 
   user   User   @relation(fields: [userId], references: [id])
   coupon Coupon @relation(fields: [couponId], references: [id])
 
+  @@unique([userId, couponId])  // ✅ 중복 발급 방지
   @@map("user_coupons")
 }

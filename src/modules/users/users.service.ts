@@ -3,6 +3,7 @@ import {
   ConflictException,
   InternalServerErrorException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
@@ -15,6 +16,7 @@ import type { JwtPayload } from '../../auth/jwt-payload.interface';
 import type { Bucket, File } from '@google-cloud/storage';
 import { MailsService } from '../mails/mails.service';
 import { UploadService } from '../upload/upload.service';
+import { CouponsService } from '../coupons/coupons.service';
 
 type UserResponse = {
   email: string;
@@ -83,6 +85,7 @@ export class UsersService {
     private jwtService: JwtService,
     private readonly mailService: MailsService,
     private uploadService: UploadService,
+    private couponsService: CouponsService,
   ) {}
 
   async registerUser(
@@ -194,6 +197,15 @@ export class UsersService {
             image: picture, // 구글 프로필 이미지 저장 가능
           },
         });
+
+        // ✅ NEW: 신규 사용자 환영 쿠폰 발급 (비동기, 실패해도 무시)
+        const newUserId = user.id;
+        this.couponsService.issueWelcomeCoupon(newUserId).catch((err) => {
+          console.error(
+            `사용자 ${newUserId}의 환영 쿠폰 발급 실패:`,
+            err.message,
+          );
+        });
       }
 
       // 5. 토큰 발급
@@ -274,6 +286,15 @@ export class UsersService {
             image: picture,
           },
         });
+
+        // ✅ NEW: 신규 사용자 환영 쿠폰 발급 (비동기, 실패해도 무시)
+        const newUserId = user.id;
+        this.couponsService.issueWelcomeCoupon(newUserId).catch((err) => {
+          console.error(
+            `사용자 ${newUserId}의 환영 쿠폰 발급 실패:`,
+            err.message,
+          );
+        });
       }
 
       // 5. 토큰 발급
@@ -329,7 +350,7 @@ export class UsersService {
     dto: UpdateExtraInfoDto,
     file?: Express.Multer.File,
   ) {
-    if (!userId) throw new Error('User ID is missing');
+    if (!userId) throw new BadRequestException('User ID is missing');
 
     // 닉네임 중복 체크
     if (dto.nickname) {

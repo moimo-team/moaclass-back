@@ -55,7 +55,11 @@ export class EnrollmentsService {
 
       // ✅ 서버에서 원가(originPrice) 조회 (quantity 반영)
       const quantity = dto.quantity ?? 1;
-      const originPrice = schedule.lesson.price * quantity;
+      const price =
+        schedule.lesson.discountedPrice > 0
+          ? schedule.lesson.discountedPrice
+          : schedule.lesson.price;
+      const originPrice = price * quantity;
       let discountAmount = 0;
       let calculatedFinalPrice = originPrice;
 
@@ -68,9 +72,18 @@ export class EnrollmentsService {
           throw new BadRequestException('존재하지 않는 쿠폰입니다.');
         }
 
-        // 사용 가능한 userCoupon 여부 확인
+        // ✅ 사용 가능한 userCoupon 여부 확인 (미사용 + 유효기간 내)
+        const now = new Date();
         const userCoupon = await tx.userCoupon.findFirst({
-          where: { userId, couponId: dto.couponId, usedAt: null },
+          where: {
+            userId,
+            couponId: dto.couponId,
+            usedAt: null,
+            OR: [
+              { expiresAt: null }, // expiresAt이 없으면 항상 유효
+              { expiresAt: { gte: now } }, // expiresAt이 미래면 유효
+            ],
+          },
         });
         if (!userCoupon) {
           throw new BadRequestException('사용 가능한 쿠폰이 없습니다.');
@@ -93,7 +106,7 @@ export class EnrollmentsService {
       }
 
       // ✅ 학생 포인트 차감
-      const usePoints = dto.usePoints ?? calculatedFinalPrice;
+      const usePoints = calculatedFinalPrice;
       if (user.point < usePoints) {
         throw new BadRequestException({
           canPay: false,
@@ -136,11 +149,11 @@ export class EnrollmentsService {
         },
       });
 
-      // ✅ userCoupon 상태 변경 (usedAt 기록)
+      // ✅ userCoupon 상태 변경 (isUsed 및 usedAt 기록)
       if (dto.couponId) {
         await tx.userCoupon.updateMany({
           where: { userId, couponId: dto.couponId, usedAt: null },
-          data: { usedAt: new Date() },
+          data: { usedAt: new Date(), isUsed: true },
         });
       }
 
@@ -370,7 +383,7 @@ export class EnrollmentsService {
             couponId: useTx.couponId,
             usedAt: { not: null },
           },
-          data: { usedAt: null },
+          data: { usedAt: null, isUsed: false },
         });
       }
 
@@ -389,9 +402,7 @@ export class EnrollmentsService {
           type: 'DEDUCT',
           status: 'COMPLETED',
           reason: '학생 환불로 인한 포인트 차감',
-          detailReason: `${detailReason}
-
-          환불율 ${refundRate * 100}% 적용`,
+          detailReason: `${detailReason}\n\n환불율 ${refundRate * 100}% 적용`,
         },
       });
 

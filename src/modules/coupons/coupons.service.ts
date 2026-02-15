@@ -34,8 +34,80 @@ export class CouponsService {
     return this.prisma.coupon.create({ data });
   }
 
+  // ✅ NEW: 신규 사용자 환영 쿠폰 발급
+  async issueWelcomeCoupon(userId: number) {
+    // 환영 쿠폰 조회 (code: 'WELCOME', 또는 활성화된 환영 쿠폰)
+    const welcomeCoupon = await this.prisma.coupon.findFirst({
+      where: {
+        code: { contains: 'WELCOME' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!welcomeCoupon) {
+      // 쿠폰이 없으면 조용히 실패 (에러 발생 안 함)
+      console.warn('활성화된 환영 쿠폰이 없습니다.');
+      return null;
+    }
+
+    // 최대 발급 횟수 확인
+    if (welcomeCoupon.currentUsage >= welcomeCoupon.maxUsage) {
+      console.warn('환영 쿠폰 발급 제한에 도달했습니다.');
+      return null;
+    }
+
+    // 이미 발급받았는지 확인
+    const existing = await this.prisma.userCoupon.findFirst({
+      where: {
+        userId,
+        couponId: welcomeCoupon.id,
+      },
+    });
+
+    if (existing) {
+      console.log('이미 환영 쿠폰을 발급받은 사용자입니다.');
+      return null;
+    }
+
+    // 환영 쿠폰 발급
+    return this.prisma.$transaction(async (tx) => {
+      // ✅ NEW: expiresAt 설정 (발급 후 30일)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      const userCoupon = await tx.userCoupon.create({
+        data: {
+          userId,
+          couponId: welcomeCoupon.id,
+          expiresAt,
+        },
+      });
+
+      // currentUsage 증가
+      await tx.coupon.update({
+        where: { id: welcomeCoupon.id },
+        data: { currentUsage: { increment: 1 } },
+      });
+
+      return userCoupon;
+    });
+  }
+
   async issueCoupon(userId: number, couponId: number) {
     //TODO: 발급일자 기준 쿠폰 유효기간 수정
+    const coupon = await this.prisma.coupon.findUnique({
+      where: { id: couponId },
+    });
+
+    if (!coupon) {
+      throw new BadRequestException('존재하지 않는 쿠폰입니다.');
+    }
+
+    // ✅ 최대 사용 횟수 초과 확인
+    if (coupon.currentUsage >= coupon.maxUsage) {
+      throw new BadRequestException('더 이상 발급할 수 없는 쿠폰입니다.');
+    }
+
     const existing = await this.prisma.userCoupon.findFirst({
       where: {
         userId,
@@ -47,11 +119,25 @@ export class CouponsService {
       throw new BadRequestException('이미 해당 쿠폰이 발급되어 있습니다.');
     }
 
-    return this.prisma.userCoupon.create({
-      data: {
-        userId,
-        couponId,
-      },
+    // ✅ 쿠폰 발급 + currentUsage 증가
+    return this.prisma.$transaction(async (tx) => {
+      // ✅ NEW: expiresAt 설정 (쿠폰의 validUntil 기준)
+      const expiresAt = coupon.validUntil;
+
+      const userCoupon = await tx.userCoupon.create({
+        data: {
+          userId,
+          couponId,
+          expiresAt,
+        },
+      });
+
+      await tx.coupon.update({
+        where: { id: couponId },
+        data: { currentUsage: { increment: 1 } },
+      });
+
+      return userCoupon;
     });
   }
 
@@ -69,7 +155,10 @@ export class CouponsService {
 
       if (uc.isUsed) {
         status = 'USED';
-      } else if (uc.coupon.validUntil && uc.coupon.validUntil < now) {
+      } else if (
+        (uc.coupon.validUntil && uc.coupon.validUntil < now) ||
+        (uc.expiresAt && uc.expiresAt < now)  // ✅ NEW: UserCoupon의 expiresAt도 확인
+      ) {
         status = 'EXPIRED';
       } else {
         status = 'AVAILABLE';

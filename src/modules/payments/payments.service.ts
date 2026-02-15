@@ -23,7 +23,7 @@ export class PaymentsService {
     });
 
     if (!schedule) {
-      throw new Error('Schedule not found');
+      throw new NotFoundException('Schedule not found');
     }
 
     const price =
@@ -33,13 +33,18 @@ export class PaymentsService {
 
     const subtotal = price * quantity;
 
+    const now = new Date();
     const availableCoupons = await this.prisma.userCoupon.findMany({
       where: {
         userId,
         isUsed: false,
+        OR: [
+          { expiresAt: null }, // expiresAt이 없으면 항상 유효
+          { expiresAt: { gte: now } }, // ✅ NEW: UserCoupon의 expiresAt 확인
+        ],
         coupon: {
-          validFrom: { lte: new Date() },
-          validUntil: { gte: new Date() },
+          validFrom: { lte: now },
+          validUntil: { gte: now },
         },
       },
       include: { coupon: true },
@@ -92,10 +97,15 @@ export class PaymentsService {
     });
 
     if (!schedule) {
-      throw new Error('Schedule not found');
+      throw new NotFoundException('Schedule not found');
     }
 
-    const subtotal = schedule.lesson.price * quantity;
+    // ✅ 할인 가격 반영
+    const price =
+      schedule.lesson.discountedPrice > 0
+        ? schedule.lesson.discountedPrice
+        : schedule.lesson.price;
+    const subtotal = price * quantity;
     let couponDiscount = 0;
 
     if (couponId) {

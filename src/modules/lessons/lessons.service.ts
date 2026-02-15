@@ -83,7 +83,7 @@ export class LessonsService {
     );
 
     if (file) {
-      const { durationMin, subCategoryIds, ...restDto } = dto;
+      const { durationSec, subCategoryIds, ...restDto } = dto;
       const uniqueSubCategoryIds = [...new Set(subCategoryIds)];
       if (uniqueSubCategoryIds.length < 1 || uniqueSubCategoryIds.length > 3) {
         throw new BadRequestException(
@@ -110,7 +110,7 @@ export class LessonsService {
         const lesson = await tx.lesson.create({
           data: {
             ...restDto,
-            durationSec: durationMin * 60,
+            durationSec: durationSec * 60,
             latitude,
             longitude,
             userId,
@@ -424,7 +424,7 @@ export class LessonsService {
       throw new ForbiddenException('본인의 클래스만 수정할 수 있습니다.');
     }
 
-    const { durationMin, subCategoryIds, address, ...restDto } = dto;
+    const { durationSec, subCategoryIds, address, ...restDto } = dto;
 
     const nextCategoryId =
       dto.lessonCategoryId ?? existingLesson.lessonCategoryId;
@@ -477,7 +477,7 @@ export class LessonsService {
         data: {
           ...restDto,
           ...(address !== undefined && { address }),
-          ...(durationMin !== undefined && { durationSec: durationMin * 60 }),
+          ...(durationSec !== undefined && { durationSec: durationSec * 60 }),
           ...(coordinates && {
             latitude: coordinates.latitude,
             longitude: coordinates.longitude,

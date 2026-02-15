@@ -8,7 +8,7 @@ import {
   Req,
   Query,
   Put,
-  BadRequestException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { EnrollmentsService } from './enrollments.service';
@@ -43,14 +43,10 @@ export class EnrollmentsController {
   }
   @Get(':id/cancel-info')
   async getCancelInfo(
-    @Param('id') enrollmentId: number,
+    @Param('id', new ParseIntPipe()) enrollmentId: number,
     @Req() req: Request & { user: JwtPayload },
   ) {
     const userId = req.user.id;
-
-    if (!enrollmentId) {
-      throw new BadRequestException('잘못된 요청입니다.');
-    }
 
     return this.enrollmentsService.getCancelInfo(enrollmentId, userId);
   }
@@ -58,12 +54,12 @@ export class EnrollmentsController {
   @Put(':id/cancel')
   async cancelEnrollment(
     @Req() req: Request & { user: JwtPayload },
-    @Param('id') id: string,
+    @Param('id', new ParseIntPipe()) id: number,
     @Body() body: { reason?: string; detailReason?: string },
   ) {
     const userId = req.user.id;
     return this.enrollmentsService.cancelEnrollment(
-      Number(id),
+      id,
       userId,
 
       body.reason,

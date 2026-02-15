@@ -54,15 +54,16 @@ export class CouponsController {
   @Post('issue')
   async issueCoupon(
     @Req() req: Request & { user: JwtPayload },
-    @Body() body: { userId: number; couponId: number },
+    @Body() body: { couponId: number },
   ) {
     try {
-      return await this.couponsService.issueCoupon(body.userId, body.couponId);
+      // ✅ 현재 인증된 사용자에게만 쿠폰 발급
+      return await this.couponsService.issueCoupon(req.user.id, body.couponId);
     } catch (error) {
       if (error instanceof BadRequestException) {
         return {
           error: {
-            code: 'COUPON_ALREADY_ISSUED',
+            code: 'COUPON_ISSUE_FAILED',
             message: error.message,
           },
         };
