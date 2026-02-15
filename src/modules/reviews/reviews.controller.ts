@@ -7,6 +7,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -22,6 +23,7 @@ import { JwtPayload } from '../../auth/jwt-payload.interface';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { ReviewsService } from './reviews.service';
 import { PageOptionsDto } from '../common/dto/page-options.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 
 type ReviewImageFieldKey =
   | 'image1'
@@ -108,6 +110,42 @@ export class ReviewsController {
       const userId = req.user.id;
       await this.reviewsService.create(userId, dto, files ?? {});
       return res.status(HttpStatus.CREATED).send();
+    } catch (error) {
+      if (error instanceof HttpException) {
+        return res.status(error.getStatus()).send();
+      }
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
+    }
+  }
+
+  @Put(':reviewId')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'image1', maxCount: 1 },
+        { name: 'image2', maxCount: 1 },
+        { name: 'image3', maxCount: 1 },
+        { name: 'image4', maxCount: 1 },
+        { name: 'image5', maxCount: 1 },
+        { name: 'image6', maxCount: 1 },
+        { name: 'image7', maxCount: 1 },
+        { name: 'image8', maxCount: 1 },
+      ],
+      { storage: multer.memoryStorage() },
+    ),
+  )
+  async update(
+    @Param('reviewId', ParseIntPipe) reviewId: number,
+    @Body() dto: UpdateReviewDto,
+    @Req() req: express.Request & { user: JwtPayload },
+    @UploadedFiles() files: ReviewUploadFiles,
+    @Res() res: express.Response,
+  ) {
+    try {
+      const userId = req.user.id;
+      await this.reviewsService.update(userId, reviewId, dto, files ?? {});
+      return res.status(HttpStatus.NO_CONTENT).send();
     } catch (error) {
       if (error instanceof HttpException) {
         return res.status(error.getStatus()).send();

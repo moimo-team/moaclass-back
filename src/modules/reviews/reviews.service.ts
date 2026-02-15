@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -7,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 import { PageOptionsDto } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
@@ -110,6 +112,130 @@ export class ReviewsService {
 
       throw new InternalServerErrorException(
         '리뷰 등록 중 오류가 발생했습니다.',
+      );
+    }
+  }
+
+  async update(
+    userId: number,
+    reviewId: number,
+    dto: UpdateReviewDto,
+    files: ReviewUploadFiles,
+  ) {
+    const review = await this.prisma.review.findUnique({
+      where: { id: reviewId },
+      select: {
+        id: true,
+        userId: true,
+        representativeImage: true,
+        images: {
+          select: {
+            id: true,
+            sequence: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    if (!review) {
+      throw new NotFoundException('수정할 리뷰를 찾을 수 없습니다.');
+    }
+
+    if (review.userId !== userId) {
+      throw new ForbiddenException('본인이 작성한 리뷰만 수정할 수 있습니다.');
+    }
+
+    const orderedKeys: ReviewImageFieldKey[] = [
+      'image1',
+      'image2',
+      'image3',
+      'image4',
+      'image5',
+      'image6',
+      'image7',
+      'image8',
+    ];
+
+    let nextRepresentativeImage = review.representativeImage;
+    const representativeFile = files.image1?.[0];
+    if (representativeFile) {
+      nextRepresentativeImage = await this.uploadService.uploadFile(
+        'review',
+        representativeFile,
+      );
+    }
+
+    type DetailImageMutation = {
+      mode: 'create' | 'update';
+      id?: number;
+      sequence: number;
+      image: string;
+    };
+
+    const imageMutations: DetailImageMutation[] = [];
+
+    for (let i = 1; i < orderedKeys.length; i += 1) {
+      const key = orderedKeys[i];
+      const file = files[key]?.[0];
+      if (!file) continue;
+
+      const imageUrl = await this.uploadService.uploadFile('review', file);
+      const sequence = i; // image2 -> 1 ... image8 -> 7
+      const existing = review.images.find(
+        (image) => image.sequence === sequence,
+      );
+
+      if (existing) {
+        imageMutations.push({
+          mode: 'update',
+          id: existing.id,
+          sequence,
+          image: imageUrl,
+        });
+      } else {
+        imageMutations.push({
+          mode: 'create',
+          sequence,
+          image: imageUrl,
+        });
+      }
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.review.update({
+          where: { id: reviewId },
+          data: {
+            ...(dto.rating !== undefined && { rating: dto.rating }),
+            ...(dto.content !== undefined && { content: dto.content }),
+            representativeImage: nextRepresentativeImage,
+          },
+        });
+
+        for (const mutation of imageMutations) {
+          if (mutation.mode === 'update' && mutation.id !== undefined) {
+            await tx.reviewImage.update({
+              where: { id: mutation.id },
+              data: {
+                image: mutation.image,
+              },
+            });
+            continue;
+          }
+
+          await tx.reviewImage.create({
+            data: {
+              reviewId,
+              sequence: mutation.sequence,
+              image: mutation.image,
+            },
+          });
+        }
+      });
+    } catch {
+      throw new InternalServerErrorException(
+        '리뷰 수정 중 오류가 발생했습니다.',
       );
     }
   }

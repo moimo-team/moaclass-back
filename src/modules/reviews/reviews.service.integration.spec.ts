@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ReviewsService } from './reviews.service';
 
@@ -426,5 +426,156 @@ describe('ReviewsService create (integration, real DB)', () => {
     expect(page1.data[0]).toHaveProperty('lessonTitle');
     expect(page1.data[0]).toHaveProperty('representativeImage');
     expect(page1.data[0]).not.toHaveProperty('image2');
+  });
+
+  it('update: 전달된 rating/content만 수정하고 미전달 값은 유지한다', async () => {
+    const { user, lesson } = await createLessonOwnerAndLesson('11');
+
+    const review = await prisma.review.create({
+      data: {
+        userId: user.id,
+        lessonId: lesson.id,
+        rating: 3.5,
+        content: '수정 전 내용',
+        representativeImage: 'https://example.com/before-rep.png',
+      },
+    });
+    reviewIds.push(review.id);
+
+    await prisma.reviewImage.create({
+      data: {
+        reviewId: review.id,
+        sequence: 1,
+        image: 'https://example.com/before-image2.png',
+      },
+    });
+
+    await service.update(
+      user.id,
+      review.id,
+      {
+        content: '수정 후 내용',
+      },
+      {},
+    );
+
+    const updated = await prisma.review.findUnique({
+      where: { id: review.id },
+      include: {
+        images: {
+          orderBy: { sequence: 'asc' },
+        },
+      },
+    });
+
+    expect(updated).not.toBeNull();
+    if (!updated) return;
+    expect(updated.rating).toBe(3.5);
+    expect(updated.content).toBe('수정 후 내용');
+    expect(updated.representativeImage).toBe(
+      'https://example.com/before-rep.png',
+    );
+    expect(updated.images[0]?.image).toBe(
+      'https://example.com/before-image2.png',
+    );
+  });
+
+  it('update: 전달된 image 키만 교체하고 미전달 이미지는 유지한다', async () => {
+    const { user, lesson } = await createLessonOwnerAndLesson('12');
+
+    const review = await prisma.review.create({
+      data: {
+        userId: user.id,
+        lessonId: lesson.id,
+        rating: 4,
+        content: '이미지 수정 전',
+        representativeImage: 'https://example.com/rep-before.png',
+      },
+    });
+    reviewIds.push(review.id);
+
+    await prisma.reviewImage.createMany({
+      data: [
+        {
+          reviewId: review.id,
+          sequence: 1,
+          image: 'https://example.com/image2-before.png',
+        },
+        {
+          reviewId: review.id,
+          sequence: 3,
+          image: 'https://example.com/image4-before.png',
+        },
+      ],
+    });
+
+    uploadService.uploadFile
+      .mockResolvedValueOnce('https://example.com/rep-after.png')
+      .mockResolvedValueOnce('https://example.com/image4-after.png');
+
+    const makeFile = (name: string) =>
+      ({
+        originalname: name,
+        mimetype: 'image/png',
+        buffer: Buffer.from('test'),
+      }) as Express.Multer.File;
+
+    await service.update(
+      user.id,
+      review.id,
+      {},
+      {
+        image1: [makeFile('image1.png')],
+        image4: [makeFile('image4.png')],
+      },
+    );
+
+    const updated = await prisma.review.findUnique({
+      where: { id: review.id },
+      include: {
+        images: {
+          orderBy: { sequence: 'asc' },
+        },
+      },
+    });
+
+    expect(updated).not.toBeNull();
+    if (!updated) return;
+    expect(updated.representativeImage).toBe(
+      'https://example.com/rep-after.png',
+    );
+    expect(updated.images.find((image) => image.sequence === 1)?.image).toBe(
+      'https://example.com/image2-before.png',
+    );
+    expect(updated.images.find((image) => image.sequence === 3)?.image).toBe(
+      'https://example.com/image4-after.png',
+    );
+  });
+
+  it('update: 본인 리뷰가 아니면 ForbiddenException을 던진다', async () => {
+    const { user: owner, lesson } = await createLessonOwnerAndLesson('13');
+    const { user: otherUser } = await createLessonOwnerAndLesson('14');
+
+    const review = await prisma.review.create({
+      data: {
+        userId: owner.id,
+        lessonId: lesson.id,
+        rating: 4.5,
+        content: '권한 테스트',
+        representativeImage: null,
+      },
+    });
+    reviewIds.push(review.id);
+
+    await expect(
+      service.update(
+        otherUser.id,
+        review.id,
+        {
+          rating: 5,
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
