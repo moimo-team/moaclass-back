@@ -11,6 +11,9 @@ import {
   UploadedFile,
   Put,
   Delete,
+  Get,
+  Param,
+  ParseIntPipe,
 } from '@nestjs/common';
 import * as express from 'express';
 import { MomentoesService } from './momentoes.service';
@@ -20,9 +23,25 @@ import { JwtPayload } from '../../auth/jwt-payload.interface';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateMomentoDto } from './dto/update-momento.dto';
 
-@Controller('momentoes')
+@Controller('teachers')
 export class MomentoesController {
   constructor(private readonly momentoesService: MomentoesService) {}
+
+  @Get(':userId')
+  async findByUserId(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Res() res: express.Response,
+  ) {
+    try {
+      const profile = await this.momentoesService.findByUserId(userId);
+      return res.status(HttpStatus.OK).json(profile);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        return res.status(error.getStatus()).json({ message: error.message });
+      }
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send();
+    }
+  }
 
   @Post()
   @UseGuards(JwtAuthGuard)
