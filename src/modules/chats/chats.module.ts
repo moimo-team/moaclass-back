@@ -18,6 +18,6 @@ import { JwtModule } from '@nestjs/jwt';
     ChatGateway, // WebSocket 실시간 처리
     PrismaService, // Prisma DB 연결
   ],
-  exports: [ChatService], // 다른 모듈에서 ChatService 사용 가능
+  exports: [ChatService, ChatGateway], // 다른 모듈에서 사용 가능
 })
-export class ChatsModule {}
+export class ChatsModule { }

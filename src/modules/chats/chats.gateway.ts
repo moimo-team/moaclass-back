@@ -4,84 +4,116 @@ import {
   MessageBody,
   ConnectedSocket,
   WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Socket, Server } from 'socket.io';
+import { Server } from 'socket.io';
 import { ChatService } from './chats.service';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import { WsJwtGuard } from '../../auth/ws-jwt.guard';
+import type { AuthenticatedSocket } from '../../types/AuthenticatedSocket';
+import { JwtService } from '@nestjs/jwt';
+import type { JwtPayload } from '../../auth/jwt-payload.interface';
 
-interface AuthenticatedSocket extends Socket {
-  data: {
-    user: {
-      id: number;
-      email: string;
-    };
-  };
-}
-@WebSocketGateway({ cors: true })
-export class ChatGateway {
+@WebSocketGateway({
+  cors: {
+    origin: '*',
+  },
+  namespace: 'chat',
+})
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly jwtService: JwtService,
+  ) { }
 
-  // @UseGuards(WsJwtGuard)
-  // @SubscribeMessage('joinRoom')
-  // async handleJoinRoom(
-  //   @MessageBody() meetingId: number,
-  //   @ConnectedSocket() client: Socket,
-  // ) {
-  //   await client.join(String(meetingId));
-  //   return { status: 'joined', meetingId };
-  // }
+  /**
+   * 클라이언트 연결 시 JWT를 검증하고, 유저를 개인 룸(user_${userId})에 입장시킵니다.
+   */
+  async handleConnection(client: AuthenticatedSocket) {
+    try {
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.split(' ')[1];
 
-  // @UseGuards(WsJwtGuard)
-  // @SubscribeMessage('sendMessage')
-  // async handleSendMessage(
-  //   @MessageBody() data: { meetingId: number; content: string },
-  //   @ConnectedSocket() client: AuthenticatedSocket,
-  // ) {
-  //   console.log('client.data.user:', client.data.user);
-  //   console.log('data:', data);
+      if (!token) throw new UnauthorizedException();
 
-  //   const user = client.data.user; // Guard에서 저장한 유저 정보
-  //   const isParticipant = await this.chatService.isUserInMeeting(
-  //     user.id,
-  //     data.meetingId,
-  //   );
-  //   if (!isParticipant) {
-  //     return { authorized: false, message: '해당 모임에 참여하지 않았습니다.' };
-  //   }
+      const payload = this.jwtService.verify<JwtPayload>(token);
+      client.data.user = payload;
 
-  //   const message = await this.chatService.createMessage(
-  //     data.meetingId,
-  //     user.id,
-  //     data.content,
-  //   );
+      // 개인 알림용 룸 입장
+      const userRoom = `user_${payload.id}`;
+      await client.join(userRoom);
+      console.log(`User ${payload.id} connected and joined room ${userRoom}`);
+    } catch (error) {
+      console.error('WebSocket Connection Error:', error.message);
+      client.disconnect();
+    }
+  }
 
-  //   this.server.to(String(data.meetingId)).emit('newMessage', message);
+  handleDisconnect(client: AuthenticatedSocket) {
+    const userId = client.data?.user?.id;
+    if (userId) {
+      console.log(`User ${userId} disconnected`);
+    }
+  }
 
-  //   return message;
-  // }
+  /**
+   * 특정 채팅방에 입장합니다.
+   */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('joinRoom')
+  async handleJoinRoom(
+    @MessageBody() roomId: number,
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    const userId = client.data.user.id;
+    const hasAccess = await this.chatService.isUserInRoom(userId, roomId);
 
-  // // 메시지 실시간 조회
-  // @UseGuards(WsJwtGuard)
-  // @SubscribeMessage('getMessages')
-  // async handleGetMessages(
-  //   @MessageBody() meetingId: number,
-  //   @ConnectedSocket() client: AuthenticatedSocket,
-  // ) {
-  //   const user = client.data.user;
+    if (!hasAccess) {
+      return { status: 'error', message: '접근 권한이 없습니다.' };
+    }
 
-  //   const isParticipant = await this.chatService.isUserInMeeting(
-  //     user.id,
-  //     meetingId,
-  //   );
-  //   if (!isParticipant) {
-  //     return { authorized: false, message: '해당 모임에 참여하지 않았습니다.' };
-  //   }
+    const roomName = `chat_room_${roomId}`;
+    await client.join(roomName);
+    return { status: 'success', roomId };
+  }
 
-  //   const messages = await this.chatService.getMessages(meetingId);
-  //   return { meetingId, messages };
-  // }
+  /**
+   * 메시지를 전송합니다.
+   */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(
+    @MessageBody() data: { roomId: number; content: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    const userId = client.data.user.id;
+    const hasAccess = await this.chatService.isUserInRoom(userId, data.roomId);
+
+    if (!hasAccess) {
+      return { status: 'error', message: '접근 권한이 없습니다.' };
+    }
+
+    const message = await this.chatService.createMessage(
+      data.roomId,
+      userId,
+      data.content,
+    );
+
+    // 해당 채팅방에 있는 모든 유저에게 메시지 전송
+    this.server.to(`chat_room_${data.roomId}`).emit('newMessage', message);
+
+    return message;
+  }
+
+  /**
+   * 외부 서비스(NotificationsService 등)에서 알림을 보낼 때 사용하기 위한 도우미 메서드
+   */
+  emitNotification(userId: number, payload: any) {
+    this.server.to(`user_${userId}`).emit('notification', payload);
+  }
 }
