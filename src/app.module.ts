@@ -13,6 +13,7 @@ import { RegionsModule } from './modules/regions/regions.module';
 import { LessonsModule } from './modules/lessons/lessons.module';
 import { MomentoesModule } from './modules/momentoes/momentoes.module';
 import { LikesModule } from './modules/likes/likes.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { LikesModule } from './modules/likes/likes.module';
     LessonsModule,
     MomentoesModule,
     LikesModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

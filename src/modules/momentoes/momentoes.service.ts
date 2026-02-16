@@ -149,6 +149,7 @@ export class MomentoesService {
       select: {
         id: true,
         nickname: true,
+        image: true,
         introduction: true,
       },
     });
@@ -160,6 +161,7 @@ export class MomentoesService {
     return {
       id: profile.id,
       nickname: profile.nickname,
+      image: profile.image,
       introduction: profile.introduction,
     };
   }
