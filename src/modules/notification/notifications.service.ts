@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GetNotificationsDto } from './dto/get-notifications.dto';
 import { NotificationItemDto } from './dto/notification-item.dto';
@@ -10,6 +10,7 @@ import { ChatGateway } from '../chats/chats.gateway';
 export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) { }
 

@@ -9,11 +9,12 @@ import {
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import { ChatService } from './chats.service';
-import { UseGuards, UnauthorizedException } from '@nestjs/common';
+import { UseGuards, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
 import { WsJwtGuard } from '../../auth/ws-jwt.guard';
 import type { AuthenticatedSocket } from '../../types/AuthenticatedSocket';
 import { JwtService } from '@nestjs/jwt';
 import type { JwtPayload } from '../../auth/jwt-payload.interface';
+import { NotificationsService } from '../notification/notifications.service';
 
 @WebSocketGateway({
   cors: {
@@ -28,6 +29,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly chatService: ChatService,
     private readonly jwtService: JwtService,
+    @Inject(forwardRef(() => NotificationsService))
+    private readonly notificationsService: NotificationsService,
   ) { }
 
   /**
@@ -107,19 +110,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // 1. 현재 채팅방(Socket Room)에 조인된 사람들에게 실시간 메시지 전달
     this.server.to(`chat_room_${data.roomId}`).emit('newMessage', message);
 
-    // 2. 방 참여자 전원의 '개인 알림 룸'으로 채팅 알림 발송 (방 목록 업데이트/푸시용)
+    // 2. 방 참여자 전원의 '개인 알림 룸'으로 채팅 알림 발송 및 DB 저장
     const participants = await this.chatService.getRoomParticipants(data.roomId);
-    participants.forEach((p) => {
+    for (const p of participants) {
       if (p.userId !== userId) {
-        this.emitNotification(p.userId, {
-          id: Date.now(),
+        // NotificationsService를 통해 DB 저장 및 실시간 전송
+        await this.notificationsService.createNotification({
+          receiverId: p.userId,
+          senderId: userId,
           type: 'NEW_CHAT',
-          message: data.content,
           roomId: data.roomId,
-          senderNickname: message.sender.nickname,
         });
       }
-    });
+    }
 
     return message;
   }

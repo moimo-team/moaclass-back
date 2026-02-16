@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notification/notifications.service';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -26,10 +27,13 @@ type EnrollmentWithRelations = Enrollment & {
 
 @Injectable()
 export class EnrollmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) { }
 
   async createEnrollment(userId: number, dto: CreateEnrollmentDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const schedule = await tx.lessonSchedule.findUnique({
         where: { id: dto.scheduleId },
         include: { lesson: true },
@@ -197,6 +201,23 @@ export class EnrollmentsService {
         teacherBalance: updatedTeacher.point,
       };
     });
+
+    // ✅ 트랜잭션 성공 후 강사에게 알림 발송 (비동기)
+    const schedule = await this.prisma.lessonSchedule.findUnique({
+      where: { id: dto.scheduleId },
+      include: { lesson: { select: { title: true, userId: true } } },
+    });
+
+    if (schedule) {
+      await this.notificationsService.createNotification({
+        receiverId: schedule.lesson.userId,
+        senderId: userId,
+        type: 'PARTICIPATION_REQUEST', // 수강 신청 알림 타입
+        lessonId: schedule.lessonId,
+      });
+    }
+
+    return result;
   }
 
   async getMyEnrollments(userId: number, dto: EnrollmentPageOptionsDto) {
@@ -247,13 +268,10 @@ export class EnrollmentsService {
       },
     });
 
-    // lessonId별로 reviewIds를 그룹핑
-    const reviewIdMap = new Map<number, number[]>();
+    // lessonId별로 reviewId를 매핑 (한 명의 유저는 레슨당 하나의 리뷰만 작성 가능)
+    const reviewIdMap = new Map<number, number>();
     reviews.forEach((r) => {
-      if (!reviewIdMap.has(r.lessonId)) {
-        reviewIdMap.set(r.lessonId, []);
-      }
-      reviewIdMap.get(r.lessonId)!.push(r.id);
+      reviewIdMap.set(r.lessonId, r.id);
     });
 
     // ✅ 타입 보강
@@ -280,7 +298,7 @@ export class EnrollmentsService {
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
         refundTransactionId: refundTx?.id ?? null,
-        reviewIds: review ?? null,
+        reviewId: review ?? null,
       };
     });
 
@@ -465,11 +483,11 @@ export class EnrollmentsService {
         quantity,
         coupon: useTx?.coupon
           ? {
-              id: useTx.coupon.id,
-              name: useTx.coupon.description,
-              discountType: useTx.coupon.discountType,
-              discountValue: useTx.coupon.discountValue,
-            }
+            id: useTx.coupon.id,
+            name: useTx.coupon.description,
+            discountType: useTx.coupon.discountType,
+            discountValue: useTx.coupon.discountValue,
+          }
           : null,
       },
       refundInfo: {
