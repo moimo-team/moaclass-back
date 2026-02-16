@@ -28,7 +28,7 @@ export class CreateLessonDto {
 
   @IsInt()
   @Type(() => Number)
-  durationSec: number;
+  durationMin: number;
 
   @IsString()
   curriculum: string;
@@ -110,4 +110,4 @@ export class CreateLessonDto {
   reservationLeadDays?: number;
 }
 
-export class UpdateLessonDto extends PartialType(CreateLessonDto) {}
+export class UpdateLessonDto extends PartialType(CreateLessonDto) { }

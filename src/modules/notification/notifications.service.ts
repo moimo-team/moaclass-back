@@ -5,6 +5,7 @@ import { NotificationItemDto } from './dto/notification-item.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
 import { ChatGateway } from '../chats/chats.gateway';
+import { NOTIFICATION_MESSAGES } from './constants/notification-messages';
 
 @Injectable()
 export class NotificationsService {
@@ -48,16 +49,7 @@ export class NotificationsService {
   }
 
   private getNotificationMessage(notification: any): string {
-    switch (notification.type) {
-      case 'PARTICIPATION_REQUEST':
-        return '새로운 참여 신청이 있습니다.';
-      case 'PARTICIPATION_ACCEPTED':
-        return '참여 신청이 승인되었습니다!';
-      case 'NEW_CHAT':
-        return '새로운 채팅 메시지가 있습니다.';
-      default:
-        return '새로운 알림이 도착했습니다.';
-    }
+    return NOTIFICATION_MESSAGES[notification.type] || NOTIFICATION_MESSAGES.DEFAULT;
   }
 
   /**
