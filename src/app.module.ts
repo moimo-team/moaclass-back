@@ -16,7 +16,9 @@ import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { PointsModule } from './modules/points/points.module';
-// import { LikesModule } from './modules/likes/likes.module';
+import { LikesModule } from './modules/likes/likes.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+
 
 @Module({
   imports: [
@@ -35,9 +37,10 @@ import { PointsModule } from './modules/points/points.module';
     PaymentsModule,
     CouponsModule,
     PointsModule,
-    // LikesModule,
+    LikesModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
