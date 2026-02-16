@@ -4,7 +4,7 @@ import { PaymentDetailDto } from './dto/payments.dto';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getPaymentPreview(
     scheduleId: number,
@@ -169,7 +169,6 @@ export class PaymentsService {
     if (!useTx) {
       throw new NotFoundException('결제 내역을 찾을 수 없습니다.');
     }
-    console.log('선생이름', schedule.lesson.teacher.teacherProfile?.nickname);
 
     const detail: PaymentDetailDto = {
       orderId: useTx.id,
@@ -190,22 +189,22 @@ export class PaymentsService {
         coupon:
           useTx && useTx.coupon
             ? {
-                id: useTx.coupon.id,
-                name: useTx.coupon.description ?? '',
-                discountType: useTx.coupon.discountType,
-                discountValue: useTx.coupon.discountValue,
-              }
+              id: useTx.coupon.id,
+              name: useTx.coupon.description ?? '',
+              discountType: useTx.coupon.discountType,
+              discountValue: useTx.coupon.discountValue,
+            }
             : null,
       },
       refundInfo: refundTx
         ? {
-            deductedAmount: finalPrice - refundTx.amount,
-            refundAmount: refundTx.amount,
-            paidAmount: finalPrice,
-            refundDate: refundTx.createdAt,
-            reason: refundTx.reason ?? '수강 취소 환불',
-            detailReason: refundTx.detailReason ?? '',
-          }
+          deductedAmount: finalPrice - refundTx.amount,
+          refundAmount: refundTx.amount,
+          paidAmount: finalPrice,
+          refundDate: refundTx.createdAt,
+          reason: refundTx.reason ?? '수강 취소 환불',
+          detailReason: refundTx.detailReason ?? '',
+        }
         : null,
     };
 
