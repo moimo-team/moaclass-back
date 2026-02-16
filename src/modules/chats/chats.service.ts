@@ -184,4 +184,11 @@ export class ChatService {
       updatedAt: p.room.updatedAt,
     }));
   }
+
+  async getRoomParticipants(roomId: number) {
+    return this.prisma.chatParticipant.findMany({
+      where: { roomId },
+      select: { userId: true },
+    });
+  }
 }

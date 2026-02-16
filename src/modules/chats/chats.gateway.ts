@@ -104,8 +104,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.content,
     );
 
-    // 해당 채팅방에 있는 모든 유저에게 메시지 전송
+    // 1. 현재 채팅방(Socket Room)에 조인된 사람들에게 실시간 메시지 전달
     this.server.to(`chat_room_${data.roomId}`).emit('newMessage', message);
+
+    // 2. 방 참여자 전원의 '개인 알림 룸'으로 채팅 알림 발송 (방 목록 업데이트/푸시용)
+    const participants = await this.chatService.getRoomParticipants(data.roomId);
+    participants.forEach((p) => {
+      if (p.userId !== userId) {
+        this.emitNotification(p.userId, {
+          id: Date.now(),
+          type: 'NEW_CHAT',
+          message: data.content,
+          roomId: data.roomId,
+          senderNickname: message.sender.nickname,
+        });
+      }
+    });
 
     return message;
   }
