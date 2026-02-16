@@ -1,8 +1,4 @@
-import {
-  IsEnum,
-  IsOptional,
-  Matches,
-} from 'class-validator';
+import { IsEnum, IsOptional, Matches } from 'class-validator';
 import { LessonScheduleStatus } from '@prisma/client';
 import { PartialType } from '@nestjs/mapped-types';
 export class CreateScheduleDto {
