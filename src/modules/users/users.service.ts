@@ -824,7 +824,7 @@ export class UsersService {
       data: {
         email: `withdrawn_${userId}_${Date.now()}@moaclass.com`,
         nickname: `(탈퇴한 사용자)_${userId}`,
-        providerId: `withdrawn_${userId}_${user.providerId}`,
+        providerId: `withdrawn_${userId}_${Date.now()}`,
         image: null,
         bio: null,
         refreshToken: null,
