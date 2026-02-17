@@ -8,8 +8,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   //CORS 설정
+  const allowedOrigins = [
+    'http://localhost:5173',
+    process.env.FRONTEND_URL?.trim(),
+    'https://moimo.vercel.app',
+  ].filter(Boolean);
+
   app.enableCors({
-    origin: [process.env.FRONTEND_URL, 'https://moimo.vercel.app'],
+    origin: allowedOrigins,
 
     credentials: true, // 쿠키/인증정보 포함 여부
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
