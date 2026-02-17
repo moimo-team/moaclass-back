@@ -753,63 +753,65 @@ export class UsersService {
       );
     }
 
-    // 1. 체크: 수강 예정인 레슨이 있는지 (학생)
-    const upcomingEnrollments = await this.prisma.enrollment.findFirst({
-      where: {
-        userId,
-        status: 'ACCEPTED',
-        schedule: { startAt: { gt: now } },
-      },
-    });
+    // 4가지 체크를 병렬로 실행하여 성능 최적화
+    const [
+      upcomingEnrollments,
+      upcomingHostedMeetings,
+      upcomingJoinedMeetings,
+      upcomingLessonSchedules,
+    ] = await Promise.all([
+      // 1. 체크: 수강 예정인 레슨이 있는지 (학생)
+      this.prisma.enrollment.findFirst({
+        where: {
+          userId,
+          status: 'ACCEPTED',
+          schedule: { startAt: { gt: now } },
+        },
+      }),
+      // 2. 체크: 진행 예정인 모임이 있는지 (호스트)
+      this.prisma.meeting.findFirst({
+        where: {
+          hostId: userId,
+          meetingDeleted: false,
+          meetingDate: { gt: now },
+        },
+      }),
+      // 3. 체크: 진행 예정인 모임 참여가 있는지 (참여자)
+      this.prisma.participation.findFirst({
+        where: {
+          userId,
+          status: 'ACCEPTED',
+          meeting: {
+            meetingDeleted: false,
+            meetingDate: { gt: now },
+          },
+        },
+      }),
+      // 4. 체크: 선생님인 경우 진행 예정인 레슨 스케줄이 있는지 (수강생이 1명이라도 있는 경우)
+      this.prisma.lessonSchedule.findFirst({
+        where: {
+          lesson: { userId },
+          startAt: { gt: now },
+          currentParticipants: { gt: 0 },
+        },
+      }),
+    ]);
 
     if (upcomingEnrollments) {
       throw new BadRequestException(
         '수강 예정인 클래스가 있어 탈퇴할 수 없습니다.',
       );
     }
-
-    // 2. 체크: 진행 예정인 모임이 있는지 (호스트)
-    const upcomingHostedMeetings = await this.prisma.meeting.findFirst({
-      where: {
-        hostId: userId,
-        meetingDeleted: false,
-        meetingDate: { gt: now },
-      },
-    });
-
     if (upcomingHostedMeetings) {
       throw new BadRequestException(
         '진행 예정인 모임의 호스트이므로 탈퇴할 수 없습니다.',
       );
     }
-
-    // 3. 체크: 진행 예정인 모임 참여가 있는지 (참여자)
-    const upcomingJoinedMeetings = await this.prisma.participation.findFirst({
-      where: {
-        userId,
-        status: 'ACCEPTED',
-        meeting: {
-          meetingDeleted: false,
-          meetingDate: { gt: now },
-        },
-      },
-    });
-
     if (upcomingJoinedMeetings) {
       throw new BadRequestException(
         '참여 예정인 모임이 있어 탈퇴할 수 없습니다.',
       );
     }
-
-    // 4. 체크: 선생님인 경우 진행 예정인 레슨 스케줄이 있는지 (수강생이 1명이라도 있는 경우)
-    const upcomingLessonSchedules = await this.prisma.lessonSchedule.findFirst({
-      where: {
-        lesson: { userId },
-        startAt: { gt: now },
-        currentParticipants: { gt: 0 },
-      },
-    });
-
     if (upcomingLessonSchedules) {
       throw new BadRequestException(
         '수강 예정인 학생이 있는 클래스가 있어 탈퇴할 수 없습니다.',
