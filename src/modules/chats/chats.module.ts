@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ChatController } from './chats.controller';
 import { ChatService } from './chats.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatGateway } from './chats.gateway';
 import { JwtModule } from '@nestjs/jwt';
+import { NotificationsModule } from '../notification/notifications.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { JwtModule } from '@nestjs/jwt';
       secret: process.env.JWT_SECRET || 'yourSecretKey',
       signOptions: { expiresIn: '1h' },
     }),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [ChatController], // REST API 엔드포인트
   providers: [
@@ -18,6 +20,6 @@ import { JwtModule } from '@nestjs/jwt';
     ChatGateway, // WebSocket 실시간 처리
     PrismaService, // Prisma DB 연결
   ],
-  exports: [ChatService], // 다른 모듈에서 ChatService 사용 가능
+  exports: [ChatService, ChatGateway], // 다른 모듈에서 사용 가능
 })
-export class ChatsModule {}
+export class ChatsModule { }

@@ -43,14 +43,14 @@ enum NotificationType {
   PARTICIPATION_REQUEST
   PARTICIPATION_ACCEPTED
   PARTICIPATION_REJECTED
-  PARTICIPATION_CANCELLED
+  PARTICIPATION_CANCELED
   MEETING_DELETED
 
   COMMENT_ON_LESSON
   REPLY_ON_COMMENT
   PAYMENT_SUCCESS
-  PAYMENT_CANCELLED
-  LESSON_CANCELLED
+  PAYMENT_CANCELED
+  LESSON_CANCELED
   REMINDER_24H
   REMINDER_1H
   REVIEW_REQUEST
@@ -65,14 +65,16 @@ enum ProviderType {
 enum TransactionStatus {
   PENDING
   COMPLETED
-  CANCELLED
+  CANCELED
   FAILED
 }
 
 enum PointType {
-  CHARGE
-  USE
-  REFUND
+  CHARGE    // 학생 포인트 충전
+  USE       // 학생 포인트 사용 (결제)
+  REFUND    // 학생 포인트 환불 (복원)
+  EARN      // 선생님 포인트 적립
+  DEDUCT    // 선생님 포인트 차감
 }
 
 enum DiscountType {
@@ -99,7 +101,7 @@ model User {
   regionId Int?    @map("region_id")
   region   Region? @relation(fields: [regionId], references: [id])
 
-  teacherProfile    TeacherProfile?  
+  teacherProfile    TeacherProfile?
   interests         UserInterest[]
   hostedMeetings    Meeting[]          @relation("HostedMeetings")
   participations    Participation[]
@@ -111,10 +113,12 @@ model User {
   pointTransactions PointTransaction[]
   userCoupons       UserCoupon[]
   lessons           Lesson[]           @relation("UserLessons")
+  chatParticipants  ChatParticipant[]
+  sentMessages      ChatMessage[]
+  studentRooms      ChatRoom[]         @relation("StudentRoom")
 
   @@map("users")
 }
-
 
 model Region {
   id      Int      @id @default(autoincrement())
@@ -179,9 +183,10 @@ model TeacherProfile {
 
   user User @relation(fields: [userId], references: [id])
 
+  
+
   @@map("teacher_profiles")
 }
-
 
 model Meeting {
   id                  Int      @id @default(autoincrement())
@@ -204,6 +209,7 @@ model Meeting {
   category       MeetingCategory @relation(fields: [categoryId], references: [id])
   participations Participation[]
   notifications  Notification[]
+  chatRooms      ChatRoom[]
 
   @@map("meetings")
 }
@@ -234,10 +240,10 @@ model Lesson {
   durationSec      Int    @map("duration_sec")
   curriculum       String @db.Text
 
-  status          LessonStatus @default(ACTIVE)
-  price           Int          @default(0)
-  discountRate    Int          @default(0) @map("discount_rate")
-  discountedPrice Int          @default(0) @map("discounted_price")
+  status       LessonStatus @default(ACTIVE)
+  price        Int          @default(0)
+  discountRate Int          @default(0) @map("discount_rate")
+  discountedPrice Int       @default(0) @map("discounted_price")
 
   maxParticipants     Int    @map("max_participants")
   representativeImage String @map("representative_image")
@@ -266,7 +272,8 @@ model Lesson {
   notifications     Notification[]
   reviews           Review[]
   wishlists         Wishlist[]
-  pointTransactions PointTransaction[]
+  chatRooms         ChatRoom[]
+
 
   subCategories LessonSubCategoryMap[]
 
@@ -314,21 +321,46 @@ model LessonSubCategoryMap {
 }
 
 model Enrollment {
-  id                 Int                 @id @default(autoincrement())
-  userId             Int                 @map("user_id")
-  scheduleId         Int                 @map("schedule_id")
-  status             ParticipationStatus
-  checkedIn          Attendance          @default(PENDING) @map("checked_in")
-  pointTransactionId Int                 @map("point_transaction_id")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at")
+  id           Int               @id @default(autoincrement())
+  userId       Int               @map("user_id")
+  scheduleId   Int               @map("schedule_id")
+  status       ParticipationStatus
+  checkedIn    Attendance        @default(PENDING) @map("checked_in")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  // 결제 상세 필드
+  originPrice     Int
+  discountAmount  Int
+  finalPrice      Int
+  quantity        Int @default(1)
 
   user        User             @relation(fields: [userId], references: [id])
   schedule    LessonSchedule   @relation(fields: [scheduleId], references: [id])
-  transaction PointTransaction @relation(fields: [pointTransactionId], references: [id])
+  transactions PointTransaction[] // ✅ 여러 트랜잭션 연결
 
   @@unique([userId, scheduleId])
   @@map("enrollments")
+}
+
+model PointTransaction {
+  id           Int               @id @default(autoincrement())
+  userId       Int               @map("user_id")
+  enrollmentId Int?              @map("enrollment_id") // ✅ Enrollment와 연결
+  couponId     Int?              @map("coupon_id")
+  amount       Int
+  type         PointType
+  status       TransactionStatus
+  reason       String?           @map("reason")
+  detailReason String?           @map("detail_reason")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  enrollment  Enrollment?  @relation(fields: [enrollmentId], references: [id])
+  coupon      Coupon?      @relation(fields: [couponId], references: [id])
+
+  @@map("point_transactions")
 }
 
 model Notification {
@@ -337,6 +369,7 @@ model Notification {
   meetingId  Int? @map("meeting_id")
   receiverId Int  @map("receiver_id")
   senderId   Int? @map("sender_id")
+  roomId     Int? @map("room_id")
 
   type      NotificationType
   isRead    Boolean          @default(false) @map("is_read")
@@ -347,6 +380,7 @@ model Notification {
   meeting  Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   receiver User     @relation("Receiver", fields: [receiverId], references: [id])
   sender   User?    @relation("Sender", fields: [senderId], references: [id])
+  room     ChatRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
   @@map("notifications")
 }
@@ -392,39 +426,19 @@ model Wishlist {
   @@map("wishlists")
 }
 
-model PointTransaction {
-  id           Int               @id @default(autoincrement())
-  userId       Int               @map("user_id")
-  lessonId     Int?               @map("lesson_id")
-  couponId     Int?              @map("coupon_id")
-  amount       Int
-  type         PointType
-  status       TransactionStatus
-  reason       String?
-  detailReason String?            @map("detail_reason")
-  createdAt    DateTime          @default(now()) @map("created_at")
-  updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at")
-
-  user   User    @relation(fields: [userId], references: [id])
-  lesson Lesson?  @relation(fields: [lessonId], references: [id])
-  coupon Coupon? @relation(fields: [couponId], references: [id])
-  enrollments Enrollment[]
-
-  @@map("point_transactions")
-}
 
 model Coupon {
-  id            Int      @id @default(autoincrement())
-  code          String   @unique
+  id            Int          @id @default(autoincrement())
+  code          String       @unique
   description   String?
   discountType  DiscountType
-  discountValue Int      @map("discount_value")
-  maxUsage      Int      @map("max_usage")
-  currentUsage  Int      @default(0) @map("current_usage")
-  validFrom     DateTime @map("valid_from")
-  validUntil    DateTime @map("valid_until")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+  discountValue Int          @map("discount_value")
+  maxUsage      Int          @map("max_usage")
+  currentUsage  Int          @default(0) @map("current_usage")
+  validFrom     DateTime     @map("valid_from")
+  validUntil    DateTime     @map("valid_until")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at")
 
   userCoupons       UserCoupon[]
   pointTransactions PointTransaction[]
@@ -433,15 +447,61 @@ model Coupon {
 }
 
 model UserCoupon {
-  id       Int       @id @default(autoincrement())
-  userId   Int       @map("user_id")
-  couponId Int       @map("coupon_id")
-  isUsed   Boolean   @default(false) @map("is_used")
-  usedAt   DateTime? @map("used_at")
-  issuedAt DateTime  @default(now()) @map("issued_at")
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  couponId  Int       @map("coupon_id")
+  isUsed    Boolean   @default(false) @map("is_used")
+  usedAt    DateTime? @map("used_at")
+  issuedAt  DateTime  @default(now()) @map("issued_at")
+  expiresAt DateTime? @map("expires_at")  // ✅ NEW: 사용자별 쿠폰 만료 시간
 
   user   User   @relation(fields: [userId], references: [id])
   coupon Coupon @relation(fields: [couponId], references: [id])
 
+  @@unique([userId, couponId])  // ✅ 중복 발급 방지
   @@map("user_coupons")
+}
+
+model ChatRoom {
+  id        Int      @id @default(autoincrement())
+  meetingId Int?     @map("meeting_id")
+  lessonId  Int?     @map("lesson_id")
+  studentId Int?     @map("student_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  meeting      Meeting?         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  lesson       Lesson?          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student      User?            @relation("StudentRoom", fields: [studentId], references: [id])
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+  notifications Notification[]
+
+  @@map("chat_rooms")
+}
+
+model ChatParticipant {
+  id        Int      @id @default(autoincrement())
+  roomId    Int      @map("room_id")
+  userId    Int      @map("user_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  roomId    Int      @map("room_id")
+  senderId  Int      @map("sender_id")
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
 }

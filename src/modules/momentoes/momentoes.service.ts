@@ -16,7 +16,7 @@ export class MomentoesService {
   constructor(
     private prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) {}
+  ) { }
 
   async create(
     dto: CreateMomentoDto,

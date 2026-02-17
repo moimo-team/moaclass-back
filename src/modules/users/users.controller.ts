@@ -5,22 +5,17 @@ import {
   Get,
   UseGuards,
   Req,
-  ValidationPipe,
   UnauthorizedException,
   Res,
   Put,
   UseInterceptors,
   UploadedFile,
   ConflictException,
-  BadRequestException,
-  Param,
-  ParseIntPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateExtraInfoDto } from './dto/update-extra-info.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtPayload } from '../../auth/jwt-payload.interface';
-import { LoginDto } from './dto/login.dto';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import multer from 'multer';

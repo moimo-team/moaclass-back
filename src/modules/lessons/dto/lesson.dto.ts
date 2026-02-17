@@ -110,4 +110,4 @@ export class CreateLessonDto {
   reservationLeadDays?: number;
 }
 
-export class UpdateLessonDto extends PartialType(CreateLessonDto) {}
+export class UpdateLessonDto extends PartialType(CreateLessonDto) { }

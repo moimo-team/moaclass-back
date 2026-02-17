@@ -1,60 +1,118 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GetNotificationsDto } from './dto/get-notifications.dto';
 import { NotificationItemDto } from './dto/notification-item.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
+import { ChatGateway } from '../chats/chats.gateway';
+import { NOTIFICATION_MESSAGES } from './constants/notification-messages';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
+  ) { }
 
-  // async getNotifications(
-  //   userId: number,
-  //   pageOptionsDto: GetNotificationsDto,
-  // ): Promise<PageDto<NotificationItemDto>> {
-  //   const { page = 1, limit = 5 } = pageOptionsDto;
+  /**
+   * 알림을 생성하고 해당 유저에게 실시간으로 전송합니다.
+   */
+  async createNotification(data: {
+    receiverId: number;
+    senderId?: number;
+    type: string;
+    meetingId?: number;
+    lessonId?: number;
+    roomId?: number;
+  }) {
+    const notification = await this.prisma.notification.create({
+      data: data as any,
+      include: {
+        meeting: true,
+        lesson: true,
+        room: true,
+      },
+    });
 
-  //   const where = { receiverId: userId };
+    // 실시간 웹소켓 전송
+    this.chatGateway.emitNotification(notification.receiverId, {
+      id: notification.id,
+      type: notification.type,
+      message: this.getNotificationMessage(notification),
+      linkId: notification.meetingId || notification.lessonId,
+      linkType: notification.meetingId ? 'MEETING' : 'LESSON',
+      roomId: notification.roomId,
+    });
 
-  //   const totalCount = await this.prisma.notification.count({ where });
+    return notification;
+  }
 
-  //   const notifications = await this.prisma.notification.findMany({
-  //     where,
-  //     skip: (page - 1) * limit,
-  //     take: limit,
-  //     orderBy: [{ isRead: 'asc' }, { createdAt: 'desc' }],
-  //     include: {
-  //       meeting: {
-  //         select: {
-  //           id: true,
-  //           title: true,
-  //         },
-  //       },
-  //     },
-  //   });
+  private getNotificationMessage(notification: any): string {
+    return NOTIFICATION_MESSAGES[notification.type] || NOTIFICATION_MESSAGES.DEFAULT;
+  }
 
-  //   const data: NotificationItemDto[] = notifications.map((n) => {
-  //     if (!n.meeting) {
-  //       throw new InternalServerErrorException(
-  //         `알림(ID: ${n.id})에 연결된 모임 정보가 없습니다.`,
-  //       );
-  //     }
+  /**
+   * 알림 목록 조회 (페이징 지원)
+   */
+  async getNotifications(
+    userId: number,
+    pageOptionsDto: GetNotificationsDto,
+  ): Promise<PageDto<NotificationItemDto>> {
+    const { page = 1, limit = 10 } = pageOptionsDto;
 
-  //     const kstDate = new Date(n.createdAt.getTime() + 9 * 60 * 60 * 1000);
-  //     const formattedDate = kstDate.toISOString().split('.')[0];
+    const where = { receiverId: userId };
 
-  //     return {
-  //       notificationId: n.id,
-  //       type: n.type,
-  //       meetingId: n.meeting.id,
-  //       meetingName: n.meeting.title,
-  //       isRead: n.isRead,
-  //       createdAt: formattedDate,
-  //     };
-  //   });
+    const totalCount = await this.prisma.notification.count({ where });
 
-  //   const pageMetaDto = new PageMetaDto(totalCount, page, limit);
-  //   return new PageDto(data, pageMetaDto);
-  // }
+    const notifications = await this.prisma.notification.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        meeting: { select: { id: true, title: true } },
+        lesson: { select: { id: true, title: true } },
+        room: { select: { id: true } },
+      },
+    });
+
+    const data: NotificationItemDto[] = notifications.map((n: any) => {
+      return {
+        notificationId: n.id,
+        type: n.type,
+        message: this.getNotificationMessage(n),
+        isRead: n.isRead,
+        createdAt: n.createdAt.toISOString(),
+        metadata: {
+          meetingId: n.meetingId ?? undefined,
+          meetingTitle: n.meeting?.title ?? undefined,
+          lessonId: n.lessonId ?? undefined,
+          lessonTitle: n.lesson?.title ?? undefined,
+          roomId: n.roomId ?? undefined,
+        },
+      };
+    });
+
+    const pageMetaDto = new PageMetaDto(totalCount, page, limit);
+    return new PageDto(data, pageMetaDto);
+  }
+
+  /**
+   * 알림 읽음 처리
+   */
+  async updateReadStatus(userId: number, notificationId: number) {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id: notificationId },
+    });
+
+    if (!notification || notification.receiverId !== userId) {
+      throw new InternalServerErrorException('알림을 찾을 수 없거나 접근 권한이 없습니다.');
+    }
+
+    return await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
 }

@@ -7,6 +7,7 @@ import { MailsModule } from '../mails/mails.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { UploadModule } from '../upload/upload.module';
+import { CouponsModule } from '../coupons/coupons.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UploadModule } from '../upload/upload.module';
     }),
     MailsModule,
     UploadModule,
+    CouponsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, PrismaService],

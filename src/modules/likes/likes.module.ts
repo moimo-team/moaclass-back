@@ -4,9 +4,9 @@ import { LikesController } from './likes.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule],
-  controllers: [LikesController],
-  providers: [LikesService],
-  exports: [LikesService],
+    imports: [PrismaModule],
+    controllers: [LikesController],
+    providers: [LikesService],
+    exports: [LikesService],
 })
-export class LikesModule {}
+export class LikesModule { }

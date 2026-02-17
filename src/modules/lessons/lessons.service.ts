@@ -37,7 +37,7 @@ export class LessonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) {}
+  ) { }
 
   private async resolveCoordinatesFromAddress(address: string) {
     try {
@@ -145,18 +145,18 @@ export class LessonsService {
       },
       ...(filters.regionId &&
         filters.regionId.length > 0 && {
-          regionId: { in: filters.regionId },
-        }),
+        regionId: { in: filters.regionId },
+      }),
       ...(filters.categoryId &&
         filters.categoryId.length > 0 && {
-          lessonCategoryId: { in: filters.categoryId },
-        }),
+        lessonCategoryId: { in: filters.categoryId },
+      }),
       ...(filters.subCategoryId &&
         filters.subCategoryId.length > 0 && {
-          subCategories: {
-            some: { subCategoryId: { in: filters.subCategoryId } },
-          },
-        }),
+        subCategories: {
+          some: { subCategoryId: { in: filters.subCategoryId } },
+        },
+      }),
       ...(filters.level &&
         filters.level.length > 0 && { level: { in: filters.level } }),
       ...(filters.minParticipants && {
