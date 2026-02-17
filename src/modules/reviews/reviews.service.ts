@@ -13,6 +13,8 @@ import { UpdateReviewDto } from './dto/update-review.dto';
 import { PageOptionsDto } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
+import { CouponsService } from '../coupons/coupons.service';
+import { PointsService } from '../points/points.service';
 
 type ReviewImageFieldKey =
   | 'image1'
@@ -33,7 +35,9 @@ export class ReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) {}
+    private readonly couponsService: CouponsService,
+    private readonly pointsService: PointsService,
+  ) { }
 
   async create(userId: number, dto: CreateReviewDto, files: ReviewUploadFiles) {
     const lesson = await this.prisma.lesson.findUnique({
@@ -149,6 +153,18 @@ export class ReviewsService {
       throw new InternalServerErrorException(
         '리뷰 등록 중 오류가 발생했습니다.',
       );
+    }
+
+    // ✅ 보상 지급 로직 (별도 예외 처리 및 비동기 실행)
+    const hasImage = !!representativeImage || reviewImages.length > 0;
+    if (hasImage) {
+      this.couponsService.issueReviewRewardCoupon(userId).catch((err) => {
+        console.error(`리뷰 보상 쿠폰 발급 실패 (userId: ${userId}):`, err);
+      });
+    } else {
+      this.pointsService.earnPoints(userId, 100).catch((err) => {
+        console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
+      });
     }
   }
 

@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionStatus, PointType } from '@prisma/client';
 @Injectable()
 export class PointsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getMyPoints(userId: number) {
     // 유저 포인트 잔액 조회
@@ -53,10 +53,10 @@ export class PointsService {
         amount: signedAmount,
         coupon: t.coupon
           ? {
-              code: t.coupon.code,
-              discountType: t.coupon.discountType,
-              discountValue: t.coupon.discountValue,
-            }
+            code: t.coupon.code,
+            discountType: t.coupon.discountType,
+            discountValue: t.coupon.discountValue,
+          }
           : null,
         createdAt: t.createdAt,
       };
@@ -112,6 +112,32 @@ export class PointsService {
           status: transaction.status,
           createdAt: transaction.createdAt,
         },
+        userPoints: updatedUser.point,
+      };
+    });
+  }
+
+  // ✅ NEW: 포인트 적립 (리뷰 보상 등)
+  async earnPoints(userId: number, amount: number, type: PointType = PointType.EARN) {
+    if (amount <= 0) return;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { point: { increment: amount } },
+      });
+
+      const transaction = await tx.pointTransaction.create({
+        data: {
+          userId,
+          amount,
+          type,
+          status: TransactionStatus.COMPLETED,
+        },
+      });
+
+      return {
+        transaction,
         userPoints: updatedUser.point,
       };
     });
