@@ -13,7 +13,7 @@ export class CreateMeetingDto {
   @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
-  interestId: number;
+  categoryId: number;
 
   @Type(() => Number)
   @IsNumber()

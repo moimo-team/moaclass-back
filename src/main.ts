@@ -10,7 +10,7 @@ async function bootstrap() {
   //CORS 설정
   const allowedOrigins = [
     'http://localhost:5173',
-        'http://localhost:3000',
+    'http://localhost:3000',
     process.env.FRONTEND_URL?.trim(),
     'https://moimo.vercel.app',
   ].filter(Boolean);

@@ -1,7 +1,7 @@
 export class BaseMeetingDto {
   meetingId: number;
   title: string;
-  interestName?: string;
+  categoryName?: string;
   maxParticipants: number;
   currentParticipants: number;
   address: string;

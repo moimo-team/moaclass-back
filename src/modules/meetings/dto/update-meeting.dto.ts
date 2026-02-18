@@ -13,7 +13,7 @@ export class UpdateMeetingDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  interestId?: number;
+  categoryId?: number;
 
   @IsOptional()
   @IsString()
