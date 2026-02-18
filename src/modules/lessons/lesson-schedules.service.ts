@@ -163,6 +163,26 @@ export class LessonSchedulesService {
     }
   }
 
+  async getSchedules(userId: number, lessonId: number) {
+    await this.checkOwnership(userId, lessonId);
+
+    const schedules = await this.prisma.lessonSchedule.findMany({
+      where: { lessonId },
+      orderBy: { startAt: 'asc' },
+      select: {
+        id: true,
+        lessonId: true,
+        startAt: true,
+        endAt: true,
+        currentParticipants: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    return schedules;
+  }
+
   async getParticipants(userId: number, scheduleId: number) {
     const schedule = await this.prisma.lessonSchedule.findUnique({
       where: { id: scheduleId },
