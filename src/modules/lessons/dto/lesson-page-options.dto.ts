@@ -6,7 +6,7 @@ import {
   IsArray,
   Matches,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PageOptionsDto } from '../../common/dto/page-options.dto';
 import { Level, LessonStatus } from '@prisma/client';
 
@@ -197,4 +197,9 @@ export class LessonPageOptionsDto extends PageOptionsDto {
   @IsBoolean()
   @Transform(({ value }): boolean => value === 'true' || value === true)
   finishedFilter?: boolean = false;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  userId?: number;
 }
