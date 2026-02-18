@@ -17,7 +17,7 @@ export class LessonSchedulesService {
   private async checkOwnership(userId: number, lessonId: number) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
-      select: { userId: true, durationSec: true },
+      select: { userId: true, durationSec: true, maxParticipants: true },
     });
 
     if (!lesson) throw new NotFoundException('클래스를 찾을 수 없습니다.');
@@ -164,7 +164,7 @@ export class LessonSchedulesService {
   }
 
   async getSchedules(userId: number, lessonId: number) {
-    await this.checkOwnership(userId, lessonId);
+    const lesson = await this.checkOwnership(userId, lessonId);
 
     const schedules = await this.prisma.lessonSchedule.findMany({
       where: { lessonId },
@@ -180,7 +180,10 @@ export class LessonSchedulesService {
       },
     });
 
-    return schedules;
+    return schedules.map((s) => ({
+      ...s,
+      maxParticipants: lesson.maxParticipants,
+    }));
   }
 
   async getParticipants(userId: number, scheduleId: number) {
