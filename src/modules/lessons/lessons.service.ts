@@ -143,6 +143,7 @@ export class LessonsService {
             ? filters.status.filter((status) => status !== 'DELETED')
             : ['ACTIVE'],
       },
+      ...(filters.userId && { userId: filters.userId }),
       ...(filters.regionId &&
         filters.regionId.length > 0 && {
         regionId: { in: filters.regionId },

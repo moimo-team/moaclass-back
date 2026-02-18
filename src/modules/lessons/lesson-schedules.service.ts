@@ -7,12 +7,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/schedule.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, ParticipationStatus } from '@prisma/client';
 import { parseSeoulDateTimeToUtc } from './utils/schedule-time.util';
 
 @Injectable()
 export class LessonSchedulesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private async checkOwnership(userId: number, lessonId: number) {
     const lesson = await this.prisma.lesson.findUnique({
@@ -161,5 +161,41 @@ export class LessonSchedulesService {
         '일정 삭제 중 오류가 발생했습니다.',
       );
     }
+  }
+
+  async getParticipants(userId: number, scheduleId: number) {
+    const schedule = await this.prisma.lessonSchedule.findUnique({
+      where: { id: scheduleId },
+      select: { lessonId: true },
+    });
+
+    if (!schedule) {
+      throw new NotFoundException('해당 일정을 찾을 수 없습니다.');
+    }
+
+    // 강사 권한 체크
+    await this.checkOwnership(userId, schedule.lessonId);
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        scheduleId,
+        status: ParticipationStatus.ACCEPTED,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            nickname: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    return enrollments.map((e) => ({
+      userId: e.user.id,
+      nickname: e.user.nickname,
+      profileImage: e.user.image,
+    }));
   }
 }

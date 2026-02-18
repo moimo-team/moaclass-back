@@ -3,6 +3,7 @@ import {
   Post,
   Param,
   Body,
+  Get,
   ParseIntPipe,
   ParseArrayPipe,
   Req,
@@ -18,7 +19,7 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 @Controller('lessons')
 @UseGuards(JwtAuthGuard)
 export class LessonSchedulesController {
-  constructor(private readonly schedulesService: LessonSchedulesService) {}
+  constructor(private readonly schedulesService: LessonSchedulesService) { }
 
   @Post(':lessonId/schedules')
   async addSchedule(
@@ -37,5 +38,13 @@ export class LessonSchedulesController {
     @Req() req: Request & { user: JwtPayload },
   ) {
     return this.schedulesService.deleteSchedule(req.user.id, scheduleId);
+  }
+
+  @Get('schedules/:scheduleId/participants')
+  async getParticipants(
+    @Param('scheduleId', ParseIntPipe) scheduleId: number,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.schedulesService.getParticipants(req.user.id, scheduleId);
   }
 }
