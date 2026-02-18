@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   ConflictException,
+  Delete,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateExtraInfoDto } from './dto/update-extra-info.dto';
@@ -28,7 +29,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   @Post('register')
   async register(
@@ -234,5 +235,12 @@ export class UsersController {
     });
 
     return res.status(200).end();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete()
+  async withdraw(@Req() req: Request & { user: JwtPayload }) {
+    const userId = req.user.id;
+    return this.usersService.withdraw(userId);
   }
 }

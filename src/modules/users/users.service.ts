@@ -86,7 +86,7 @@ export class UsersService {
     private readonly mailService: MailsService,
     private uploadService: UploadService,
     private couponsService: CouponsService,
-  ) {}
+  ) { }
 
   async registerUser(
     nickname: string,
@@ -405,10 +405,10 @@ export class UsersService {
       await this.prisma.$transaction([
         ...(toDelete.length
           ? [
-              this.prisma.userInterest.deleteMany({
-                where: { id: { in: toDelete } },
-              }),
-            ]
+            this.prisma.userInterest.deleteMany({
+              where: { id: { in: toDelete } },
+            }),
+          ]
           : []),
         ...toAdd.map((lessonCategoryId) =>
           this.prisma.userInterest.create({
@@ -648,7 +648,7 @@ export class UsersService {
     });
     console.log(user, '유저');
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       return {
         authenticated: false,
       };
@@ -739,5 +739,99 @@ export class UsersService {
       { id, email },
       { secret: process.env.JWT_SECRET, expiresIn: '7d' },
     );
+  }
+  async withdraw(userId: number) {
+    const now = new Date();
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || user.deletedAt) {
+      throw new BadRequestException(
+        '이미 탈퇴했거나 존재하지 않는 사용자입니다.',
+      );
+    }
+
+    // 4가지 체크를 병렬로 실행하여 성능 최적화
+    const [
+      upcomingEnrollments,
+      upcomingHostedMeetings,
+      upcomingJoinedMeetings,
+      upcomingLessonSchedules,
+    ] = await Promise.all([
+      // 1. 체크: 수강 예정인 레슨이 있는지 (학생)
+      this.prisma.enrollment.findFirst({
+        where: {
+          userId,
+          status: 'ACCEPTED',
+          schedule: { startAt: { gt: now } },
+        },
+      }),
+      // 2. 체크: 진행 예정인 모임이 있는지 (호스트)
+      this.prisma.meeting.findFirst({
+        where: {
+          hostId: userId,
+          meetingDeleted: false,
+          meetingDate: { gt: now },
+        },
+      }),
+      // 3. 체크: 진행 예정인 모임 참여가 있는지 (참여자)
+      this.prisma.participation.findFirst({
+        where: {
+          userId,
+          status: 'ACCEPTED',
+          meeting: {
+            meetingDeleted: false,
+            meetingDate: { gt: now },
+          },
+        },
+      }),
+      // 4. 체크: 선생님인 경우 진행 예정인 레슨 스케줄이 있는지 (수강생이 1명이라도 있는 경우)
+      this.prisma.lessonSchedule.findFirst({
+        where: {
+          lesson: { userId },
+          startAt: { gt: now },
+          currentParticipants: { gt: 0 },
+        },
+      }),
+    ]);
+
+    if (upcomingEnrollments) {
+      throw new BadRequestException(
+        '수강 예정인 클래스가 있어 탈퇴할 수 없습니다.',
+      );
+    }
+    if (upcomingHostedMeetings) {
+      throw new BadRequestException(
+        '진행 예정인 모임의 호스트이므로 탈퇴할 수 없습니다.',
+      );
+    }
+    if (upcomingJoinedMeetings) {
+      throw new BadRequestException(
+        '참여 예정인 모임이 있어 탈퇴할 수 없습니다.',
+      );
+    }
+    if (upcomingLessonSchedules) {
+      throw new BadRequestException(
+        '수강 예정인 학생이 있는 클래스가 있어 탈퇴할 수 없습니다.',
+      );
+    }
+
+    // 5. 익명화 및 Soft Delete 수행
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        email: `withdrawn_${userId}_${Date.now()}@moaclass.com`,
+        nickname: `(탈퇴한 사용자)_${userId}`,
+        providerId: `withdrawn_${userId}_${Date.now()}`,
+        image: null,
+        bio: null,
+        refreshToken: null,
+        deletedAt: now,
+      },
+    });
+
+    return { success: true };
   }
 }

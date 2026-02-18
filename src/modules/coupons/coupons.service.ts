@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class CouponsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // 1. 쿠폰 상세 조회
   async getCoupon(id: number) {
@@ -86,6 +86,46 @@ export class CouponsService {
       // currentUsage 증가
       await tx.coupon.update({
         where: { id: welcomeCoupon.id },
+        data: { currentUsage: { increment: 1 } },
+      });
+
+      return userCoupon;
+    });
+  }
+
+  // ✅ NEW: 리뷰 작성 보상 쿠폰 발급 (이미지 리뷰)
+  async issueReviewRewardCoupon(userId: number) {
+    const rewardCoupon = await this.prisma.coupon.findFirst({
+      where: {
+        code: { contains: 'REVIEW' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!rewardCoupon) {
+      console.warn('활성화된 리뷰 보상 쿠폰이 없습니다.');
+      return null;
+    }
+
+    if (rewardCoupon.currentUsage >= rewardCoupon.maxUsage) {
+      console.warn('리뷰 보상 쿠폰 발급 제한에 도달했습니다.');
+      return null;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const userCoupon = await tx.userCoupon.create({
+        data: {
+          userId,
+          couponId: rewardCoupon.id,
+          expiresAt,
+        },
+      });
+
+      await tx.coupon.update({
+        where: { id: rewardCoupon.id },
         data: { currentUsage: { increment: 1 } },
       });
 
