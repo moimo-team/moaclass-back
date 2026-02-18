@@ -31,6 +31,14 @@ export class LessonSchedulesController {
     await this.schedulesService.addSchedules(req.user.id, lessonId, dtos);
   }
 
+  @Get(':lessonId/schedules')
+  async getSchedules(
+    @Param('lessonId', ParseIntPipe) lessonId: number,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.schedulesService.getSchedules(req.user.id, lessonId);
+  }
+
   @Delete('schedules/:scheduleId')
   @HttpCode(204)
   async deleteSchedule(
