@@ -19,7 +19,7 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 @Controller('lessons')
 @UseGuards(JwtAuthGuard)
 export class LessonSchedulesController {
-  constructor(private readonly schedulesService: LessonSchedulesService) { }
+  constructor(private readonly schedulesService: LessonSchedulesService) {}
 
   @Post(':lessonId/schedules')
   async addSchedule(

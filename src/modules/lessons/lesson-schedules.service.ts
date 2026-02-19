@@ -12,7 +12,7 @@ import { parseSeoulDateTimeToUtc } from './utils/schedule-time.util';
 
 @Injectable()
 export class LessonSchedulesService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async checkOwnership(userId: number, lessonId: number) {
     const lesson = await this.prisma.lesson.findUnique({
