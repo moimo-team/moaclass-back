@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Request } from 'express';
+import { JwtPayload } from 'src/auth/jwt-payload.interface';
 import { LessonSchedulesController } from './lesson-schedules.controller';
 import { LessonSchedulesService } from './lesson-schedules.service';
 
@@ -12,11 +14,31 @@ jest.mock(
 
 describe('LessonSchedulesController', () => {
   let controller: LessonSchedulesController;
-  let schedulesService: { getParticipants: jest.Mock };
+  let schedulesService: {
+    getParticipants: jest.Mock<
+      Promise<
+        Array<{
+          userId: number;
+          nickname: string;
+          profileImage: string | null;
+        }>
+      >,
+      [number, number, number]
+    >;
+  };
 
   beforeEach(async () => {
     schedulesService = {
-      getParticipants: jest.fn(),
+      getParticipants: jest.fn<
+        Promise<
+          Array<{
+            userId: number;
+            nickname: string;
+            profileImage: string | null;
+          }>
+        >,
+        [number, number, number]
+      >(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -29,13 +51,19 @@ describe('LessonSchedulesController', () => {
       ],
     }).compile();
 
-    controller = module.get<LessonSchedulesController>(LessonSchedulesController);
+    controller = module.get<LessonSchedulesController>(
+      LessonSchedulesController,
+    );
   });
 
   describe('getParticipants', () => {
     it('passes userId, lessonId, and scheduleId to service', async () => {
-      const req = { user: { id: 7 } } as any;
-      const expected = [{ userId: 11, nickname: 'student', profileImage: null }];
+      const req = {
+        user: { id: 7 },
+      } as Request & { user: JwtPayload };
+      const expected = [
+        { userId: 11, nickname: 'student', profileImage: null },
+      ];
 
       schedulesService.getParticipants.mockResolvedValue(expected);
 

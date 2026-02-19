@@ -1,27 +1,43 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ParticipationStatus } from '@prisma/client';
 import { LessonSchedulesService } from './lesson-schedules.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
+type LessonRecord = {
+  userId: number;
+  durationSec: number;
+  maxParticipants: number;
+};
+
+type PrismaMock = {
+  lesson: {
+    findUnique: jest.Mock<Promise<LessonRecord | null>, [unknown]>;
+  };
+  lessonSchedule: {
+    findFirst: jest.Mock<Promise<{ id: number } | null>, [unknown]>;
+    findMany: jest.Mock<Promise<Array<Record<string, unknown>>>, [unknown]>;
+  };
+  enrollment: {
+    findMany: jest.Mock<Promise<Array<Record<string, unknown>>>, [unknown]>;
+  };
+};
+
 describe('LessonSchedulesService', () => {
   let service: LessonSchedulesService;
-  let prismaMock: any;
+  let prismaMock: PrismaMock;
 
   beforeEach(async () => {
     prismaMock = {
       lesson: {
-        findUnique: jest.fn(),
+        findUnique: jest.fn<Promise<LessonRecord | null>, [unknown]>(),
       },
       lessonSchedule: {
-        findFirst: jest.fn(),
-        findMany: jest.fn(),
+        findFirst: jest.fn<Promise<{ id: number } | null>, [unknown]>(),
+        findMany: jest.fn<Promise<Array<Record<string, unknown>>>, [unknown]>(),
       },
       enrollment: {
-        findMany: jest.fn(),
+        findMany: jest.fn<Promise<Array<Record<string, unknown>>>, [unknown]>(),
       },
     };
 
