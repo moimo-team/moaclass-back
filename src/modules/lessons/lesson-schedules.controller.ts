@@ -48,11 +48,16 @@ export class LessonSchedulesController {
     return this.schedulesService.deleteSchedule(req.user.id, scheduleId);
   }
 
-  @Get('schedules/:scheduleId/participants')
+  @Get(':lessonId/schedules/:scheduleId/participants')
   async getParticipants(
+    @Param('lessonId', ParseIntPipe) lessonId: number,
     @Param('scheduleId', ParseIntPipe) scheduleId: number,
     @Req() req: Request & { user: JwtPayload },
   ) {
-    return this.schedulesService.getParticipants(req.user.id, scheduleId);
+    return this.schedulesService.getParticipants(
+      req.user.id,
+      lessonId,
+      scheduleId,
+    );
   }
 }
