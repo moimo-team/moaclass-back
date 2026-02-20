@@ -8,11 +8,14 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateScheduleDto } from './dto/schedule.dto';
 import { Prisma, ParticipationStatus } from '@prisma/client';
-import { parseSeoulDateTimeToUtc } from './utils/schedule-time.util';
+import {
+  formatScheduleWithSeoulTime,
+  parseSeoulDateTimeToUtc,
+} from './utils/schedule-time.util';
 
 @Injectable()
 export class LessonSchedulesService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async checkOwnership(userId: number, lessonId: number) {
     const lesson = await this.prisma.lesson.findUnique({
@@ -181,23 +184,22 @@ export class LessonSchedulesService {
     });
 
     return schedules.map((s) => ({
-      ...s,
+      ...formatScheduleWithSeoulTime(s),
       maxParticipants: lesson.maxParticipants,
     }));
   }
 
-  async getParticipants(userId: number, scheduleId: number) {
-    const schedule = await this.prisma.lessonSchedule.findUnique({
-      where: { id: scheduleId },
-      select: { lessonId: true },
+  async getParticipants(userId: number, lessonId: number, scheduleId: number) {
+    await this.checkOwnership(userId, lessonId);
+
+    const schedule = await this.prisma.lessonSchedule.findFirst({
+      where: { id: scheduleId, lessonId },
+      select: { id: true },
     });
 
     if (!schedule) {
       throw new NotFoundException('해당 일정을 찾을 수 없습니다.');
     }
-
-    // 강사 권한 체크
-    await this.checkOwnership(userId, schedule.lessonId);
 
     const enrollments = await this.prisma.enrollment.findMany({
       where: {
