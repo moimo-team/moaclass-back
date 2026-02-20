@@ -35,7 +35,6 @@ export class UsersController {
   async register(
     @Body('nickname') nickname: string,
     @Body('email') email: string,
-    @Body('password') password: string,
     @Res() res: Response,
   ) {
     const { accessToken, refreshToken, user } =
@@ -79,26 +78,25 @@ export class UsersController {
   //   return this.usersService.findById(userId);
   // }
 
-  // @Post('login')
-  // async login(
-  //   @Body(new ValidationPipe()) body: LoginDto,
-  //   @Res() res: Response,
-  // ) {
-  //   const { accessToken, refreshToken, user } = await this.usersService.login(
-  //     body.email,
-  //     body.password,
-  //   );
+  @Post('login')
+  async login(
+    @Body('email') email: string,
+    @Res() res: Response,
+  ) {
+    const { accessToken, refreshToken, user } = await this.usersService.login(
+      email
+    );
 
-  //   res.setHeader('Authorization', `Bearer ${accessToken}`);
-  //   res.cookie('refreshToken', refreshToken, {
-  //     httpOnly: true,
-  //     secure: true,
-  //     sameSite: 'strict',
-  //     maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
-  //   });
+    res.setHeader('Authorization', `Bearer ${accessToken}`);
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+    });
 
-  //   return res.json({ user });
-  // }
+    return res.json({ user });
+  }
 
   @Post('login/google')
   async loginWithGoogle(
