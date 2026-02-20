@@ -112,7 +112,7 @@ export class UsersService {
           email,
           nickname,
           provider: 'KAKAO',
-          providerId: '123453123',
+          providerId: `test_${email}`,
         },
       });
 
@@ -315,35 +315,27 @@ export class UsersService {
     }
   }
 
-  // // 🔹 일반 로그인
-  // async login(email: string, password: string) {
-  //   const user = await this.prisma.user.findUnique({ where: { email } });
-  //   if (!user || !user.password) {
-  //     throw new UnauthorizedException(
-  //       '이메일 또는 비밀번호가 올바르지 않습니다.',
-  //     );
-  //   }
+  async login(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException(
+        '이메일이 올바르지 않습니다.',
+      );
+    }
 
-  //   const isPasswordValid = await bcrypt.compare(password, user.password);
-  //   if (!isPasswordValid) {
-  //     throw new UnauthorizedException(
-  //       '이메일 또는 비밀번호가 올바르지 않습니다.',
-  //     );
-  //   }
+    const refreshToken = await this.issueOrRefreshToken(user);
+    const accessToken = this.issueAccessToken(user);
 
-  //   const refreshToken = await this.issueOrRefreshToken(user);
-  //   const accessToken = this.issueAccessToken(user);
-
-  //   return {
-  //     accessToken,
-  //     refreshToken,
-  //     user: {
-  //       isNewUser: !user.bio,
-  //       email: user.email,
-  //       nickname: user.nickname,
-  //     },
-  //   };
-  // }
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        isNewUser: !user.bio,
+        email: user.email,
+        nickname: user.nickname,
+      },
+    };
+  }
 
   async updateUser(
     userId: number,
