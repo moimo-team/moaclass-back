@@ -71,6 +71,20 @@ export class CouponsService {
 
     // 환영 쿠폰 발급
     return this.prisma.$transaction(async (tx) => {
+      // ✅ 중복 발급 방지 (트랜잭션 내 재검사)
+      const existingInTx = await tx.userCoupon.findUnique({
+        where: {
+          userId_couponId: {
+            userId,
+            couponId: welcomeCoupon.id,
+          },
+        },
+      });
+
+      if (existingInTx) {
+        return existingInTx;
+      }
+
       // ✅ NEW: expiresAt 설정 (발급 후 30일)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
@@ -113,6 +127,20 @@ export class CouponsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // ✅ 중복 발급 방지
+      const existing = await tx.userCoupon.findUnique({
+        where: {
+          userId_couponId: {
+            userId,
+            couponId: rewardCoupon.id,
+          },
+        },
+      });
+
+      if (existing) {
+        return existing;
+      }
+
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30); // ✅ 7일에서 30일로 변경
 
@@ -153,29 +181,32 @@ export class CouponsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
-
-      const userCoupon = await tx.userCoupon.upsert({
+      // ✅ 중복 발급 방지 (이미 발급받은 이력이 있으면 무시)
+      const existing = await tx.userCoupon.findUnique({
         where: {
           userId_couponId: {
             userId,
             couponId: retakeCoupon.id,
           },
         },
-        create: {
+      });
+
+      if (existing) {
+        return existing;
+      }
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      const userCoupon = await tx.userCoupon.create({
+        data: {
           userId,
           couponId: retakeCoupon.id,
           expiresAt,
         },
-        update: {
-          isUsed: false,
-          usedAt: null,
-          issuedAt: new Date(),
-          expiresAt,
-        },
       });
 
+      // ✅ 새롭게 발급된 경우에만 usage 증가
       await tx.coupon.update({
         where: { id: retakeCoupon.id },
         data: { currentUsage: { increment: 1 } },
