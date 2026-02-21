@@ -120,6 +120,11 @@ export class UsersService {
       const refreshToken = await this.issueOrRefreshToken(created);
       const accessToken = this.issueAccessToken(created);
 
+      // ✅ NEW: 신규 사용자 환영 쿠폰 발급 (비동기)
+      this.couponsService.issueWelcomeCoupon(created.id).catch((err) => {
+        console.error(`사용자 ${created.id}의 환영 쿠폰 발급 실패:`, err.message);
+      });
+
       return {
         accessToken,
         refreshToken,

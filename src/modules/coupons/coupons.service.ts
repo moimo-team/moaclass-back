@@ -114,7 +114,7 @@ export class CouponsService {
 
     return this.prisma.$transaction(async (tx) => {
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      expiresAt.setDate(expiresAt.getDate() + 30); // ✅ 7일에서 30일로 변경
 
       const userCoupon = await tx.userCoupon.create({
         data: {
@@ -126,6 +126,58 @@ export class CouponsService {
 
       await tx.coupon.update({
         where: { id: rewardCoupon.id },
+        data: { currentUsage: { increment: 1 } },
+      });
+
+      return userCoupon;
+    });
+  }
+
+  // ✅ NEW: 재수강 쿠폰 발급 (수강 완료 보상)
+  async issueRetakeCoupon(userId: number) {
+    const retakeCoupon = await this.prisma.coupon.findFirst({
+      where: {
+        code: { contains: 'RETAKE' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!retakeCoupon) {
+      console.warn('활성화된 재수강 쿠폰이 없습니다.');
+      return null;
+    }
+
+    if (retakeCoupon.currentUsage >= retakeCoupon.maxUsage) {
+      console.warn('재수강 쿠폰 발급 제한에 도달했습니다.');
+      return null;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      const userCoupon = await tx.userCoupon.upsert({
+        where: {
+          userId_couponId: {
+            userId,
+            couponId: retakeCoupon.id,
+          },
+        },
+        create: {
+          userId,
+          couponId: retakeCoupon.id,
+          expiresAt,
+        },
+        update: {
+          isUsed: false,
+          usedAt: null,
+          issuedAt: new Date(),
+          expiresAt,
+        },
+      });
+
+      await tx.coupon.update({
+        where: { id: retakeCoupon.id },
         data: { currentUsage: { increment: 1 } },
       });
 

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -30,6 +31,7 @@ export class EnrollmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly couponsService: CouponsService,
   ) { }
 
   async createEnrollment(userId: number, dto: CreateEnrollmentDto) {
@@ -286,6 +288,14 @@ export class EnrollmentsService {
       ).find((t: PointTransaction) => t.type === 'REFUND');
 
       const review = reviewIdMap.get(e.schedule.lessonId);
+      const status = this.mapStatus(e, now);
+
+      // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
+      if (status === '수강완료') {
+        this.couponsService.issueRetakeCoupon(userId).catch((err) => {
+          console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
+        });
+      }
 
       return {
         enrollmentId: e.id,
@@ -294,7 +304,7 @@ export class EnrollmentsService {
         title: e.schedule.lesson.title,
         startAt: e.schedule.startAt.toISOString(),
         endAt: e.schedule.endAt.toISOString(),
-        status: this.mapStatus(e, now),
+        status,
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
         refundTransactionId: refundTx?.id ?? null,
