@@ -1,3 +1,5 @@
+import 'dotenv/config';
+import process from 'node:process';
 import { PrismaClient, DiscountType } from '@prisma/client';
 
 const prisma = new PrismaClient();
