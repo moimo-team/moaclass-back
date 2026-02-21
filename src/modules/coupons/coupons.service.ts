@@ -71,7 +71,7 @@ export class CouponsService {
 
     // 환영 쿠폰 발급
     return this.prisma.$transaction(async (tx) => {
-      // ✅ 중복 발급 방지 (트랜잭션 내 재검사)
+      // ✅ 1. 중복 발급 방지 (트랜잭션 내 재검사)
       const existingInTx = await tx.userCoupon.findUnique({
         where: {
           userId_couponId: {
@@ -85,7 +85,23 @@ export class CouponsService {
         return existingInTx;
       }
 
-      // ✅ NEW: expiresAt 설정 (발급 후 30일)
+      // ✅ 2. 최대 발급 횟수 원자적 확인 및 증가 (Race Condition 방지)
+      const updateResult = await tx.coupon.updateMany({
+        where: {
+          id: welcomeCoupon.id,
+          currentUsage: { lt: welcomeCoupon.maxUsage },
+        },
+        data: {
+          currentUsage: { increment: 1 },
+        },
+      });
+
+      if (updateResult.count === 0) {
+        console.warn(`환영 쿠폰 발급 제한 도달 (ID: ${welcomeCoupon.id})`);
+        return null;
+      }
+
+      // ✅ 3. 쿠폰 발급 (expiresAt: 30일)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -95,12 +111,6 @@ export class CouponsService {
           couponId: welcomeCoupon.id,
           expiresAt,
         },
-      });
-
-      // currentUsage 증가
-      await tx.coupon.update({
-        where: { id: welcomeCoupon.id },
-        data: { currentUsage: { increment: 1 } },
       });
 
       return userCoupon;
@@ -127,7 +137,7 @@ export class CouponsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // ✅ 중복 발급 방지
+      // ✅ 1. 중복 발급 방지
       const existing = await tx.userCoupon.findUnique({
         where: {
           userId_couponId: {
@@ -141,8 +151,25 @@ export class CouponsService {
         return existing;
       }
 
+      // ✅ 2. 최대 발급 횟수 원자적 확인 및 증가 (Race Condition 방지)
+      const updateResult = await tx.coupon.updateMany({
+        where: {
+          id: rewardCoupon.id,
+          currentUsage: { lt: rewardCoupon.maxUsage },
+        },
+        data: {
+          currentUsage: { increment: 1 },
+        },
+      });
+
+      if (updateResult.count === 0) {
+        console.warn(`리뷰 보상 쿠폰 발급 제한 도달 (ID: ${rewardCoupon.id})`);
+        return null;
+      }
+
+      // ✅ 3. 쿠폰 발급 (expiresAt: 30일)
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30); // ✅ 7일에서 30일로 변경
+      expiresAt.setDate(expiresAt.getDate() + 30);
 
       const userCoupon = await tx.userCoupon.create({
         data: {
@@ -150,11 +177,6 @@ export class CouponsService {
           couponId: rewardCoupon.id,
           expiresAt,
         },
-      });
-
-      await tx.coupon.update({
-        where: { id: rewardCoupon.id },
-        data: { currentUsage: { increment: 1 } },
       });
 
       return userCoupon;
@@ -181,7 +203,7 @@ export class CouponsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // ✅ 중복 발급 방지 (이미 발급받은 이력이 있으면 무시)
+      // ✅ 1. 중복 발급 방지 (이미 발급받은 이력이 있으면 무시)
       const existing = await tx.userCoupon.findUnique({
         where: {
           userId_couponId: {
@@ -195,6 +217,23 @@ export class CouponsService {
         return existing;
       }
 
+      // ✅ 2. 최대 발급 횟수 원자적 확인 및 증가 (Race Condition 방지)
+      const updateResult = await tx.coupon.updateMany({
+        where: {
+          id: retakeCoupon.id,
+          currentUsage: { lt: retakeCoupon.maxUsage },
+        },
+        data: {
+          currentUsage: { increment: 1 },
+        },
+      });
+
+      if (updateResult.count === 0) {
+        console.warn(`재수강 쿠폰 발급 제한 도달 (ID: ${retakeCoupon.id})`);
+        return null;
+      }
+
+      // ✅ 3. 쿠폰 발급 (expiresAt: 30일)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -204,12 +243,6 @@ export class CouponsService {
           couponId: retakeCoupon.id,
           expiresAt,
         },
-      });
-
-      // ✅ 새롭게 발급된 경우에만 usage 증가
-      await tx.coupon.update({
-        where: { id: retakeCoupon.id },
-        data: { currentUsage: { increment: 1 } },
       });
 
       return userCoupon;
@@ -242,9 +275,38 @@ export class CouponsService {
       throw new BadRequestException('이미 해당 쿠폰이 발급되어 있습니다.');
     }
 
-    // ✅ 쿠폰 발급 + currentUsage 증가
+    // ✅ 쿠폰 발급 + currentUsage 증가 (트랜잭션)
     return this.prisma.$transaction(async (tx) => {
-      // ✅ NEW: expiresAt 설정 (쿠폰의 validUntil 기준)
+      // ✅ 1. 중복 발급 방지 (트랜잭션 내 재검사)
+      const existingInTx = await tx.userCoupon.findUnique({
+        where: {
+          userId_couponId: {
+            userId,
+            couponId,
+          },
+        },
+      });
+
+      if (existingInTx) {
+        throw new BadRequestException('이미 해당 쿠폰이 발급되어 있습니다.');
+      }
+
+      // ✅ 2. 최대 발급 횟수 원자적 확인 및 증가 (Race Condition 방지)
+      const updateResult = await tx.coupon.updateMany({
+        where: {
+          id: couponId,
+          currentUsage: { lt: coupon.maxUsage },
+        },
+        data: {
+          currentUsage: { increment: 1 },
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException('더 이상 발급할 수 없는 쿠폰입니다.');
+      }
+
+      // ✅ 3. 쿠폰 발급
       const expiresAt = coupon.validUntil;
 
       const userCoupon = await tx.userCoupon.create({
@@ -253,11 +315,6 @@ export class CouponsService {
           couponId,
           expiresAt,
         },
-      });
-
-      await tx.coupon.update({
-        where: { id: couponId },
-        data: { currentUsage: { increment: 1 } },
       });
 
       return userCoupon;
