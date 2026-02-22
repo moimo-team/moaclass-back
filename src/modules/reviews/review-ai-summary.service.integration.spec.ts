@@ -261,7 +261,7 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
       response: { text: () => generatedSummary },
     });
 
-    await service.refreshAllLessonReviewSummaries();
+    await service.refreshAllLessonReviewSummaries({ lessonIds: [lesson.id] });
 
     const updatedLesson = await prisma.lesson.findUnique({
       where: { id: lesson.id },
@@ -304,7 +304,7 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
       reviewIds.push(review.id);
     }
 
-    await service.refreshAllLessonReviewSummaries();
+    await service.refreshAllLessonReviewSummaries({ lessonIds: [lesson.id] });
 
     const updatedLesson = await prisma.lesson.findUnique({
       where: { id: lesson.id },
