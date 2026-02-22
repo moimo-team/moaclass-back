@@ -312,6 +312,7 @@ export class EnrollmentsService {
 
       const status = this.mapStatus(e, now);
 
+
       return {
         enrollmentId: e.id,
         scheduleId: e.schedule.id,
