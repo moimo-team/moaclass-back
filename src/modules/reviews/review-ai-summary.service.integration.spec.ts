@@ -21,6 +21,8 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
   const regionIds: number[] = [];
   const lessonCategoryIds: number[] = [];
   const lessonIds: number[] = [];
+  const scheduleIds: number[] = [];
+  const enrollmentIds: number[] = [];
   const reviewIds: number[] = [];
 
   const originalGeminiApiKey = process.env.GEMINI_API_KEY;
@@ -49,6 +51,20 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
         where: { id: { in: reviewIds } },
       });
       reviewIds.length = 0;
+    }
+
+    if (enrollmentIds.length > 0) {
+      await prisma.enrollment.deleteMany({
+        where: { id: { in: enrollmentIds } },
+      });
+      enrollmentIds.length = 0;
+    }
+
+    if (scheduleIds.length > 0) {
+      await prisma.lessonSchedule.deleteMany({
+        where: { id: { in: scheduleIds } },
+      });
+      scheduleIds.length = 0;
     }
 
     if (lessonIds.length > 0) {
@@ -172,6 +188,32 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
     return { lesson };
   }
 
+  async function createAcceptedEnrollment(userId: number, lessonId: number) {
+    const schedule = await prisma.lessonSchedule.create({
+      data: {
+        lessonId,
+        startAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        endAt: new Date(Date.now() + 25 * 60 * 60 * 1000),
+      },
+    });
+    scheduleIds.push(schedule.id);
+
+    const enrollment = await prisma.enrollment.create({
+      data: {
+        userId,
+        scheduleId: schedule.id,
+        status: 'ACCEPTED',
+        originPrice: 30000,
+        discountAmount: 0,
+        finalPrice: 30000,
+        quantity: 1,
+      },
+    });
+    enrollmentIds.push(enrollment.id);
+
+    return { enrollment, schedule };
+  }
+
   it('refreshAllLessonReviewSummaries: 5+ reviews exist => stores generated summary in lesson.reviewAiSummary', async () => {
     const { lesson } = await createLessonOwnerAndLesson('1');
 
@@ -196,9 +238,14 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
     ];
 
     for (let i = 0; i < contents.length; i += 1) {
+      const { enrollment } = await createAcceptedEnrollment(
+        reviewer.id,
+        lesson.id,
+      );
       const review = await prisma.review.create({
         data: {
           userId: reviewer.id,
+          enrollmentId: enrollment.id,
           lessonId: lesson.id,
           rating: 4.5 + (i % 2) * 0.1,
           content: contents[i],
@@ -241,9 +288,14 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
     userIds.push(reviewer.id);
 
     for (let i = 0; i < 4; i += 1) {
+      const { enrollment } = await createAcceptedEnrollment(
+        reviewer.id,
+        lesson.id,
+      );
       const review = await prisma.review.create({
         data: {
           userId: reviewer.id,
+          enrollmentId: enrollment.id,
           lessonId: lesson.id,
           rating: 4.0 + i * 0.1,
           content: `short review ${i + 1}`,

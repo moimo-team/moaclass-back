@@ -339,6 +339,8 @@ model Enrollment {
   schedule    LessonSchedule   @relation(fields: [scheduleId], references: [id])
   transactions PointTransaction[] // ✅ 여러 트랜잭션 연결
 
+  review      Review?
+
   @@unique([userId, scheduleId])
   @@map("enrollments")
 }
@@ -388,6 +390,7 @@ model Notification {
 model Review {
   id                  Int      @id @default(autoincrement())
   userId              Int      @map("user_id")
+  enrollmentId        Int      @unique @map("enrollment_id")
   lessonId            Int      @map("lesson_id")
   representativeImage String?  @map("representative_image")
   rating              Float
@@ -395,9 +398,10 @@ model Review {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
 
-  user   User          @relation(fields: [userId], references: [id])
-  lesson Lesson        @relation(fields: [lessonId], references: [id])
-  images ReviewImage[]
+  user       User          @relation(fields: [userId], references: [id])
+  enrollment Enrollment    @relation(fields: [enrollmentId], references: [id])
+  lesson     Lesson        @relation(fields: [lessonId], references: [id])
+  images     ReviewImage[]
 
   @@map("reviews")
 }

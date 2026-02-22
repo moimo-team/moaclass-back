@@ -59,20 +59,18 @@ export class ReviewsController {
     }
   }
 
-  @Get('me/lessons/:lessonId/:reviewId')
+  @Get('me/enrollments/:enrollmentId')
   @UseGuards(JwtAuthGuard)
-  async findMyLessonReviewDetail(
+  async findMyEnrollmentReviewDetail(
     @Req() req: express.Request & { user: JwtPayload },
-    @Param('lessonId', ParseIntPipe) lessonId: number,
-    @Param('reviewId', ParseIntPipe) reviewId: number,
+    @Param('enrollmentId', ParseIntPipe) enrollmentId: number,
     @Res() res: express.Response,
   ) {
     try {
       const userId = req.user.id;
-      const review = await this.reviewsService.findMyLessonReviewDetail(
+      const review = await this.reviewsService.findMyEnrollmentReviewDetail(
         userId,
-        lessonId,
-        reviewId,
+        enrollmentId,
       );
       return res.status(HttpStatus.OK).json(review);
     } catch (error) {
