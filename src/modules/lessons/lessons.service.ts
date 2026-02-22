@@ -136,7 +136,7 @@ export class LessonsService {
     const limit = filters.limit ?? 10;
     const skip = (page - 1) * limit;
 
-    if (filters.isLike && !userId) {
+    if (filters.isLiked && !userId) {
       return new PageDto([], new PageMetaDto(0, page, limit));
     }
 
@@ -172,7 +172,7 @@ export class LessonsService {
       }),
       ...(filters.minPrice && { price: { gte: filters.minPrice } }),
       ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
-      ...(filters.isLike &&
+      ...(filters.isLiked &&
         userId && {
           wishlists: {
             some: { userId },

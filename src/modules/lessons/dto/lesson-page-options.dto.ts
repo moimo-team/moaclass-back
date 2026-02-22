@@ -201,7 +201,7 @@ export class LessonPageOptionsDto extends PageOptionsDto {
   @IsOptional()
   @IsBoolean()
   @Transform(({ value }): boolean => value === 'true' || value === true)
-  isLike?: boolean = false;
+  isLiked?: boolean = false;
 
   @IsOptional()
   @IsNumber()

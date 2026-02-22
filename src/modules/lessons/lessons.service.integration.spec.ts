@@ -1,4 +1,4 @@
-﻿import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { LessonsService } from './lessons.service';
 
 describe('LessonsService (integration, real DB)', () => {
@@ -278,7 +278,7 @@ describe('LessonsService (integration, real DB)', () => {
         page: 1,
         limit: 10,
         userId: teacher.id,
-        isLike: true,
+        isLiked: true,
       },
       viewer.id,
     );
@@ -306,7 +306,7 @@ describe('LessonsService (integration, real DB)', () => {
         page: 1,
         limit: 10,
         userId: teacher.id,
-        isLike: true,
+        isLiked: true,
       },
       undefined,
     );
