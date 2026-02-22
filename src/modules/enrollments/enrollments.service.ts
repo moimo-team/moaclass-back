@@ -287,15 +287,15 @@ export class EnrollmentsService {
       ).find((t: PointTransaction) => t.type === 'REFUND');
 
       const review = reviewIdMap.get(e.id);
-      
+
       const status = this.mapStatus(e, now);
 
-//       // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
-//       if (status === '수강완료') {
-//         this.couponsService.issueRetakeCoupon(userId).catch((err) => {
-//           console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
-//         });
-//       }
+      //       // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
+      //       if (status === '수강완료') {
+      //         this.couponsService.issueRetakeCoupon(userId).catch((err) => {
+      //           console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
+      //         });
+      //       }
 
       return {
         enrollmentId: e.id,

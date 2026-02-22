@@ -20,6 +20,7 @@ import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { LessonPageOptionsDto } from './dto/lesson-page-options.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtPayload } from '../../auth/jwt-payload.interface';
+import { OptionalJwtAuthGuard } from '../../auth/optional-jwt-auth.guard';
 import multer from 'multer';
 
 @Controller('lessons')
@@ -40,13 +41,21 @@ export class LessonsController {
   }
 
   @Get()
-  async getLessons(@Query() filters: LessonPageOptionsDto) {
-    return this.lessonsService.getLessons(filters);
+  @UseGuards(OptionalJwtAuthGuard)
+  async getLessons(
+    @Query() filters: LessonPageOptionsDto,
+    @Req() req: Request & { user?: JwtPayload | null },
+  ) {
+    return this.lessonsService.getLessons(filters, req.user?.id);
   }
 
   @Get(':lessonId')
-  async getLessonDetail(@Param('lessonId') lessonId: string) {
-    return this.lessonsService.getLessonDetail(Number(lessonId));
+  @UseGuards(OptionalJwtAuthGuard)
+  async getLessonDetail(
+    @Param('lessonId') lessonId: string,
+    @Req() req: Request & { user?: JwtPayload | null },
+  ) {
+    return this.lessonsService.getLessonDetail(Number(lessonId), req.user?.id);
   }
 
   @UseGuards(JwtAuthGuard)
