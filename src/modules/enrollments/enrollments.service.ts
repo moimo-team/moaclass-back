@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
-import { CouponsService } from '../coupons/coupons.service';
+// import { CouponsService } from '../coupons/coupons.service';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -31,8 +31,7 @@ export class EnrollmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-    private readonly couponsService: CouponsService,
-  ) { }
+  ) {}
 
   async createEnrollment(userId: number, dto: CreateEnrollmentDto) {
     const result = await this.prisma.$transaction(async (tx) => {
@@ -258,22 +257,22 @@ export class EnrollmentsService {
     ]);
 
     // ✅ 해당 수강에 대한 review ID 조회 (한 번에)
-    const lessonIds = enrollments.map((e) => e.schedule.lessonId);
+    const enrollmentIds = enrollments.map((e) => e.id);
     const reviews = await this.prisma.review.findMany({
       where: {
         userId,
-        lessonId: { in: lessonIds },
+        enrollmentId: { in: enrollmentIds },
       },
       select: {
         id: true,
-        lessonId: true,
+        enrollmentId: true,
       },
     });
 
-    // lessonId별로 reviewId를 매핑 (한 명의 유저는 레슨당 하나의 리뷰만 작성 가능)
+    // enrollmentId별로 reviewId를 매핑 (한 명의 유저는 레슨당 하나의 리뷰만 작성 가능)
     const reviewIdMap = new Map<number, number>();
     reviews.forEach((r) => {
-      reviewIdMap.set(r.lessonId, r.id);
+      reviewIdMap.set(r.enrollmentId, r.id);
     });
 
     // ✅ 타입 보강
@@ -287,15 +286,16 @@ export class EnrollmentsService {
         e.transactions ?? []
       ).find((t: PointTransaction) => t.type === 'REFUND');
 
-      const review = reviewIdMap.get(e.schedule.lessonId);
+      const review = reviewIdMap.get(e.id);
+      
       const status = this.mapStatus(e, now);
 
-      // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
-      if (status === '수강완료') {
-        this.couponsService.issueRetakeCoupon(userId).catch((err) => {
-          console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
-        });
-      }
+//       // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
+//       if (status === '수강완료') {
+//         this.couponsService.issueRetakeCoupon(userId).catch((err) => {
+//           console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
+//         });
+//       }
 
       return {
         enrollmentId: e.id,
@@ -473,7 +473,7 @@ export class EnrollmentsService {
     const refundRate = calculateRefundRate(schedule.startAt, now);
 
     // ✅ 환불 금액 계산
-    const refundDiscountAmount = Math.floor(discountAmount * refundRate);
+
     const refundFinalAmount = Math.floor(finalPrice * refundRate);
     const paidAmount = finalPrice;
     const deductedAmount = paidAmount - refundFinalAmount; // 환불규정에 따른 차감금액
@@ -493,11 +493,11 @@ export class EnrollmentsService {
         quantity,
         coupon: useTx?.coupon
           ? {
-            id: useTx.coupon.id,
-            name: useTx.coupon.description,
-            discountType: useTx.coupon.discountType,
-            discountValue: useTx.coupon.discountValue,
-          }
+              id: useTx.coupon.id,
+              name: useTx.coupon.description,
+              discountType: useTx.coupon.discountType,
+              discountValue: useTx.coupon.discountValue,
+            }
           : null,
       },
       refundInfo: {

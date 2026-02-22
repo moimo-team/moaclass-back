@@ -7,6 +7,8 @@ import { LessonReviewsController } from './lesson-reviews.controller';
 import { TeacherReviewsController } from './teacher-reviews.controller';
 import { CouponsModule } from '../coupons/coupons.module';
 import { PointsModule } from '../points/points.module';
+import { ReviewAiSummaryService } from './review-ai-summary.service';
+import { ReviewAiSummaryScheduler } from './review-ai-summary.scheduler';
 
 @Module({
   imports: [PrismaModule, UploadModule, CouponsModule, PointsModule],
@@ -15,6 +17,6 @@ import { PointsModule } from '../points/points.module';
     LessonReviewsController,
     TeacherReviewsController,
   ],
-  providers: [ReviewsService],
+  providers: [ReviewsService, ReviewAiSummaryService, ReviewAiSummaryScheduler],
 })
-export class ReviewsModule { }
+export class ReviewsModule {}

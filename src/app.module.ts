@@ -18,10 +18,11 @@ import { CouponsModule } from './modules/coupons/coupons.module';
 import { PointsModule } from './modules/points/points.module';
 import { LikesModule } from './modules/likes/likes.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
-
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     PrismaModule,
     UsersModule,
     MeetingsModule,
@@ -43,4 +44,4 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

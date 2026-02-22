@@ -4,7 +4,7 @@ import { IsInt, IsNumber, IsString, Max, Min } from 'class-validator';
 export class CreateReviewDto {
   @Transform(({ value }: { value: unknown }) => Number(value))
   @IsInt()
-  lessonId: number;
+  enrollmentId: number;
 
   @Transform(({ value }: { value: unknown }) => Number(value))
   @IsNumber({ maxDecimalPlaces: 1 })
