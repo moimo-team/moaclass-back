@@ -1,7 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
-import { CouponsService } from '../coupons/coupons.service';
 import { MailsService } from '../mails/mails.service';
 import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
@@ -33,7 +32,6 @@ export class EnrollmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-    private readonly couponsService: CouponsService,
     private readonly mailsService: MailsService,
   ) { }
 
@@ -313,13 +311,6 @@ export class EnrollmentsService {
       const review = reviewIdMap.get(e.id);
 
       const status = this.mapStatus(e, now);
-
-      //       // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
-      //       if (status === '수강완료') {
-      //         this.couponsService.issueRetakeCoupon(userId).catch((err) => {
-      //           console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
-      //         });
-      //       }
 
       return {
         enrollmentId: e.id,
