@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
+// import { CouponsService } from '../coupons/coupons.service';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -268,7 +269,7 @@ export class EnrollmentsService {
       },
     });
 
-    // lessonId별로 reviewId를 매핑 (한 명의 유저는 레슨당 하나의 리뷰만 작성 가능)
+    // enrollmentId별로 reviewId를 매핑 (한 명의 유저는 레슨당 하나의 리뷰만 작성 가능)
     const reviewIdMap = new Map<number, number>();
     reviews.forEach((r) => {
       reviewIdMap.set(r.enrollmentId, r.id);
@@ -286,6 +287,15 @@ export class EnrollmentsService {
       ).find((t: PointTransaction) => t.type === 'REFUND');
 
       const review = reviewIdMap.get(e.id);
+      
+      const status = this.mapStatus(e, now);
+
+//       // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
+//       if (status === '수강완료') {
+//         this.couponsService.issueRetakeCoupon(userId).catch((err) => {
+//           console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
+//         });
+//       }
 
       return {
         enrollmentId: e.id,
@@ -294,7 +304,7 @@ export class EnrollmentsService {
         title: e.schedule.lesson.title,
         startAt: e.schedule.startAt.toISOString(),
         endAt: e.schedule.endAt.toISOString(),
-        status: this.mapStatus(e, now),
+        status,
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
         refundTransactionId: refundTx?.id ?? null,

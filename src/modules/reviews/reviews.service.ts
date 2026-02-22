@@ -177,7 +177,7 @@ export class ReviewsService {
         console.error(`리뷰 보상 쿠폰 발급 실패 (userId: ${userId}):`, err);
       });
     } else {
-      this.pointsService.earnPoints(userId, 100).catch((err) => {
+      this.pointsService.earnPoints(userId, 1000).catch((err) => {
         console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
       });
     }
