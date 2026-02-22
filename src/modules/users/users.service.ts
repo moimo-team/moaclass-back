@@ -369,6 +369,7 @@ export class UsersService {
       data: {
         nickname: dto.nickname,
         bio: dto.bio,
+        regionId: dto.regionId,
         ...(imageUrl ? { image: imageUrl } : {}),
       },
       include: {

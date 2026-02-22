@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
 import { CouponsService } from '../coupons/coupons.service';
+import { MailsService } from '../mails/mails.service';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -32,6 +33,7 @@ export class EnrollmentsService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly couponsService: CouponsService,
+    private readonly mailsService: MailsService,
   ) { }
 
   async createEnrollment(userId: number, dto: CreateEnrollmentDto) {
@@ -201,13 +203,16 @@ export class EnrollmentsService {
         },
         remainingPoints: updatedUser.point,
         teacherBalance: updatedTeacher.point,
+        originPrice,
+        discountAmount,
+        finalPrice: calculatedFinalPrice,
       };
     });
 
     // ✅ 트랜잭션 성공 후 강사에게 알림 발송 (비동기)
     const schedule = await this.prisma.lessonSchedule.findUnique({
       where: { id: dto.scheduleId },
-      include: { lesson: { select: { title: true, userId: true } } },
+      include: { lesson: { select: { title: true, userId: true, address: true } } },
     });
 
     if (schedule) {
@@ -217,6 +222,23 @@ export class EnrollmentsService {
         type: 'PARTICIPATION_REQUEST', // 수강 신청 알림 타입
         lessonId: schedule.lessonId,
       });
+
+      // ✅ 트랜잭션 성공 후 이메일 발송 (비동기)
+      if (dto.email) {
+        // 이 로직은 result에 담긴 결제 상세 정보를 사용합니다.
+        this.mailsService.sendEnrollmentEmail(dto.email, {
+          title: schedule.lesson.title,
+          startAt: schedule.startAt.toLocaleString(),
+          endAt: schedule.endAt.toLocaleString(),
+          address: schedule.lesson.address,
+          quantity: dto.quantity ?? 1,
+          originPrice: result.originPrice,
+          discountAmount: result.discountAmount,
+          finalPrice: result.finalPrice,
+        }).catch(err => {
+          console.error('결제 완료 메일 발송 실패:', err);
+        });
+      }
     }
 
     return result;

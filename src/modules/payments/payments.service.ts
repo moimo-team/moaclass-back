@@ -109,10 +109,27 @@ export class PaymentsService {
     let couponDiscount = 0;
 
     if (couponId) {
-      const coupon = await this.prisma.coupon.findUnique({
-        where: { id: couponId },
+      const now = new Date();
+      // ✅ 사용 가능한 userCoupon 여부 확인 (미사용 + 유효기간 내)
+      const userCoupon = await this.prisma.userCoupon.findFirst({
+        where: {
+          userId,
+          couponId,
+          isUsed: false,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gte: now } },
+          ],
+          coupon: {
+            validFrom: { lte: now },
+            validUntil: { gte: now },
+          },
+        },
+        include: { coupon: true },
       });
-      if (coupon) {
+
+      if (userCoupon) {
+        const coupon = userCoupon.coupon;
         if (coupon.discountType === 'PERCENT') {
           couponDiscount = Math.floor(subtotal * (coupon.discountValue / 100));
         } else if (coupon.discountType === 'FIXED') {
