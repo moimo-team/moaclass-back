@@ -160,7 +160,6 @@ export class UsersController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     const userId = req.user.id;
-    console.log(dto);
 
     return this.usersService.updateUser(userId, dto, file);
   }

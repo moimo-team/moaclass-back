@@ -1,6 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import nodemailer, { Transporter } from 'nodemailer';
 import 'dotenv/config';
+import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+export interface EnrollmentEmailDetails {
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  address: string;
+  quantity: number;
+  originPrice: number;
+  discountAmount: number;
+  finalPrice: number;
+}
+
 @Injectable()
 export class MailsService {
   private transporter: Transporter;
@@ -23,12 +35,40 @@ export class MailsService {
       html: `<p>아래 인증코드를 입력하세요:</p><h2>${code}</h2>`,
     });
   }
-  async sendEnrollmentEmail(email: string, details: any) {
+  private escapeHtml(text: string): string {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  private formatKstDate(date: Date): string {
+    const seoulTime = formatUtcDateToSeoulDateTime(date); // "YYYY-MM-DDTHH:mm:ss"
+    const [datePart, timePart] = seoulTime.split('T');
+    const [year, month, day] = datePart.split('-');
+    const [hour, minute] = timePart.split(':');
+
+    const h = parseInt(hour);
+    const ampm = h >= 12 ? '오후' : '오전';
+    const hour12 = h % 12 || 12;
+
+    return `${year}년 ${month}월 ${day}일 ${ampm} ${hour12}:${minute}`;
+  }
+
+  async sendEnrollmentEmail(email: string, details: EnrollmentEmailDetails) {
     const { title, startAt, endAt, address, quantity, originPrice, discountAmount, finalPrice } = details;
+    const escapedTitle = this.escapeHtml(title);
+    const escapedAddress = this.escapeHtml(address);
+    const formattedStart = this.formatKstDate(startAt);
+    const formattedEnd = this.formatKstDate(endAt);
+
     await this.transporter.sendMail({
-      from: `"Support Moaclass" <${process.env.MAIL_USER}>`,
+      from: `"Support MoaClass" <${process.env.MAIL_USER}>`,
       to: email,
-      subject: `[MoaClass] 클래스 수강 신청이 완료되었습니다: ${title}`,
+      subject: `[MoaClass] 클래스 수강 신청이 완료되었습니다: ${escapedTitle}`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px;">
           <h2 style="color: #4CAF50; text-align: center;">수강 신청 완료!</h2>
@@ -36,9 +76,9 @@ export class MailsService {
           
           <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin-top: 0; border-bottom: 2px solid #4CAF50; padding-bottom: 5px;">클래스 정보</h3>
-            <p style="margin: 5px 0;"><strong>클래스명:</strong> ${title}</p>
-            <p style="margin: 5px 0;"><strong>수강 시간:</strong> ${startAt} ~ ${endAt}</p>
-            <p style="margin: 5px 0;"><strong>장소:</strong> ${address}</p>
+            <p style="margin: 5px 0;"><strong>클래스명:</strong> ${escapedTitle}</p>
+            <p style="margin: 5px 0;"><strong>수강 시간:</strong> ${formattedStart} ~ ${formattedEnd}</p>
+            <p style="margin: 5px 0;"><strong>장소:</strong> ${escapedAddress}</p>
           </div>
 
           <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">

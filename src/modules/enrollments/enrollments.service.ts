@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { MailsService } from '../mails/mails.service';
+import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -228,8 +229,8 @@ export class EnrollmentsService {
         // 이 로직은 result에 담긴 결제 상세 정보를 사용합니다.
         this.mailsService.sendEnrollmentEmail(dto.email, {
           title: schedule.lesson.title,
-          startAt: schedule.startAt.toLocaleString(),
-          endAt: schedule.endAt.toLocaleString(),
+          startAt: schedule.startAt,
+          endAt: schedule.endAt,
           address: schedule.lesson.address,
           quantity: dto.quantity ?? 1,
           originPrice: result.originPrice,
@@ -324,8 +325,8 @@ export class EnrollmentsService {
         scheduleId: e.schedule.id,
         image: e.schedule.lesson.representativeImage,
         title: e.schedule.lesson.title,
-        startAt: e.schedule.startAt.toISOString(),
-        endAt: e.schedule.endAt.toISOString(),
+        startAt: formatUtcDateToSeoulDateTime(e.schedule.startAt),
+        endAt: formatUtcDateToSeoulDateTime(e.schedule.endAt),
         status,
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
@@ -505,8 +506,8 @@ export class EnrollmentsService {
         title: schedule.lesson.title,
         teacherName:
           schedule.lesson.teacher.teacherProfile?.nickname ?? '알 수 없음',
-        startAt: schedule.startAt,
-        endAt: schedule.endAt,
+        startAt: formatUtcDateToSeoulDateTime(schedule.startAt),
+        endAt: formatUtcDateToSeoulDateTime(schedule.endAt),
       },
       paymentInfo: {
         originPrice,

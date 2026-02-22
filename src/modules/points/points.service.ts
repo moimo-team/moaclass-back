@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionStatus, PointType } from '@prisma/client';
+import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 @Injectable()
 export class PointsService {
   constructor(private readonly prisma: PrismaService) { }
@@ -58,7 +59,7 @@ export class PointsService {
             discountValue: t.coupon.discountValue,
           }
           : null,
-        createdAt: t.createdAt,
+        createdAt: formatUtcDateToSeoulDateTime(t.createdAt),
       };
     });
 
@@ -110,7 +111,7 @@ export class PointsService {
           amount: transaction.amount,
           type: transaction.type,
           status: transaction.status,
-          createdAt: transaction.createdAt,
+          createdAt: formatUtcDateToSeoulDateTime(transaction.createdAt),
         },
         userPoints: updatedUser.point,
       };

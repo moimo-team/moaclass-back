@@ -9,7 +9,7 @@ import { MailsModule } from '../mails/mails.module';
 @Module({
   imports: [NotificationsModule, CouponsModule, MailsModule],
   controllers: [EnrollmentsController],
-  providers: [EnrollmentsService],
+  providers: [EnrollmentsService, PrismaService],
   exports: [EnrollmentsService],
 })
 export class EnrollmentsModule { }

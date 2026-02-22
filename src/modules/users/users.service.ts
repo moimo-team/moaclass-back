@@ -636,7 +636,7 @@ export class UsersService {
   // }
 
   async verifyUser(id: number) {
-    console.log(id);
+
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
