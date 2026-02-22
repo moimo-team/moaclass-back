@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-
+import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 @Injectable()
 export class CouponsService {
   constructor(private readonly prisma: PrismaService) { }
@@ -13,12 +13,25 @@ export class CouponsService {
   async getCoupon(id: number) {
     const coupon = await this.prisma.coupon.findUnique({ where: { id } });
     if (!coupon) throw new NotFoundException('쿠폰을 찾을 수 없습니다.');
-    return coupon;
+    return {
+      ...coupon,
+      validFrom: formatUtcDateToSeoulDateTime(coupon.validFrom),
+      validUntil: formatUtcDateToSeoulDateTime(coupon.validUntil),
+      createdAt: formatUtcDateToSeoulDateTime(coupon.createdAt),
+      updatedAt: formatUtcDateToSeoulDateTime(coupon.updatedAt),
+    };
   }
 
   // 2. 전체 쿠폰 조회
   async getAllCoupons() {
-    return this.prisma.coupon.findMany();
+    const coupons = await this.prisma.coupon.findMany();
+    return coupons.map((coupon) => ({
+      ...coupon,
+      validFrom: formatUtcDateToSeoulDateTime(coupon.validFrom),
+      validUntil: formatUtcDateToSeoulDateTime(coupon.validUntil),
+      createdAt: formatUtcDateToSeoulDateTime(coupon.createdAt),
+      updatedAt: formatUtcDateToSeoulDateTime(coupon.updatedAt),
+    }));
   }
 
   // 3. 쿠폰 생성
@@ -350,11 +363,11 @@ export class CouponsService {
         description: uc.coupon.description,
         discountType: uc.coupon.discountType,
         discountValue: uc.coupon.discountValue,
-        validFrom: uc.coupon.validFrom,
-        validUntil: uc.coupon.validUntil,
+        validFrom: formatUtcDateToSeoulDateTime(uc.coupon.validFrom),
+        validUntil: uc.expiresAt ? formatUtcDateToSeoulDateTime(uc.expiresAt) : null,
         isUsed: uc.isUsed,
-        usedAt: uc.usedAt,
-        issuedAt: uc.issuedAt,
+        usedAt: uc.usedAt ? formatUtcDateToSeoulDateTime(uc.usedAt) : null,
+        issuedAt: formatUtcDateToSeoulDateTime(uc.issuedAt),
         status,
       };
     });
