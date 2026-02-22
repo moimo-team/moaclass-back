@@ -1,4 +1,4 @@
-import {
+﻿import {
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -37,13 +37,39 @@ export class ReviewsService {
     private readonly uploadService: UploadService,
     private readonly couponsService: CouponsService,
     private readonly pointsService: PointsService,
-  ) { }
+  ) {}
 
   async create(userId: number, dto: CreateReviewDto, files: ReviewUploadFiles) {
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: dto.lessonId },
-      select: { id: true, status: true, userId: true },
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: dto.enrollmentId },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        schedule: {
+          select: {
+            lessonId: true,
+            lesson: {
+              select: { id: true, status: true, userId: true },
+            },
+          },
+        },
+      },
     });
+
+    if (!enrollment) {
+      throw new NotFoundException(
+        '리뷰를 등록할 결제 내역을 찾을 수 없습니다.',
+      );
+    }
+
+    if (enrollment.userId !== userId) {
+      throw new ForbiddenException(
+        '해당 결제 내역에 대한 리뷰만 작성할 수 있습니다.',
+      );
+    }
+
+    const lesson = enrollment.schedule.lesson;
 
     if (!lesson || lesson.status === 'DELETED') {
       throw new NotFoundException('리뷰를 등록할 클래스를 찾을 수 없습니다.');
@@ -55,33 +81,21 @@ export class ReviewsService {
       );
     }
 
-    const participated = await this.prisma.enrollment.findFirst({
-      where: {
-        userId,
-        status: 'ACCEPTED',
-        schedule: {
-          lessonId: dto.lessonId,
-        },
-      },
-      select: { id: true },
-    });
-
-    if (!participated) {
+    if (enrollment.status !== 'ACCEPTED') {
       throw new ForbiddenException(
-        '클래스에 참여한 사용자만 리뷰를 작성할 수 있습니다.',
+        '수강이 확정된 결제 건만 리뷰를 작성할 수 있습니다.',
       );
     }
 
-    const existingReview = await this.prisma.review.findFirst({
+    const existingReview = await this.prisma.review.findUnique({
       where: {
-        userId,
-        lessonId: dto.lessonId,
+        enrollmentId: dto.enrollmentId,
       },
       select: { id: true },
     });
 
     if (existingReview) {
-      throw new ConflictException('이미 해당 클래스에 리뷰를 작성했습니다.');
+      throw new ConflictException('이미 해당 결제 건에 리뷰를 작성했습니다.');
     }
 
     const orderedKeys: ReviewImageFieldKey[] = [
@@ -125,7 +139,8 @@ export class ReviewsService {
         const review = await tx.review.create({
           data: {
             userId,
-            lessonId: dto.lessonId,
+            enrollmentId: dto.enrollmentId,
+            lessonId: enrollment.schedule.lessonId,
             rating: dto.rating,
             content: dto.content,
             representativeImage,
@@ -179,6 +194,7 @@ export class ReviewsService {
       select: {
         id: true,
         userId: true,
+        enrollmentId: true,
         lessonId: true,
         representativeImage: true,
         images: {
@@ -214,18 +230,16 @@ export class ReviewsService {
       );
     }
 
-    const participated = await this.prisma.enrollment.findFirst({
-      where: {
-        userId,
-        status: 'ACCEPTED',
-        schedule: {
-          lessonId: review.lessonId,
-        },
-      },
-      select: { id: true },
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: review.enrollmentId },
+      select: { id: true, userId: true, status: true },
     });
 
-    if (!participated) {
+    if (
+      !enrollment ||
+      enrollment.userId !== userId ||
+      enrollment.status !== 'ACCEPTED'
+    ) {
       throw new ForbiddenException(
         '클래스에 참여한 사용자만 리뷰를 수정할 수 있습니다.',
       );
@@ -524,17 +538,18 @@ export class ReviewsService {
     }
   }
 
-  async findMyLessonReviewDetail(
-    userId: number,
-    lessonId: number,
-    reviewId: number,
-  ) {
-    const review = await this.prisma.review.findFirst({
-      where: {
-        id: reviewId,
-        userId,
-        lessonId,
-      },
+  async findMyEnrollmentReviewDetail(userId: number, enrollmentId: number) {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { id: true, userId: true },
+    });
+
+    if (!enrollment || enrollment.userId !== userId) {
+      throw new NotFoundException('해당 결제 내역을 찾을 수 없습니다.');
+    }
+
+    const review = await this.prisma.review.findUnique({
+      where: { enrollmentId },
       select: {
         id: true,
         lessonId: true,
@@ -546,11 +561,8 @@ export class ReviewsService {
         rating: true,
         content: true,
         representativeImage: true,
-        createdAt: true,
-        updatedAt: true,
         images: {
           select: {
-            id: true,
             image: true,
             sequence: true,
           },
@@ -562,7 +574,10 @@ export class ReviewsService {
     });
 
     if (!review) {
-      throw new NotFoundException('해당 리뷰를 찾을 수 없습니다.');
+      return {
+        hasReview: false,
+        review: null,
+      };
     }
 
     const imageMap: Partial<Record<ReviewImageFieldKey, string | null>> = {
@@ -584,12 +599,15 @@ export class ReviewsService {
     });
 
     return {
-      id: review.id,
-      lessonId: review.lessonId,
-      lessonTitle: review.lesson.title,
-      rating: review.rating,
-      content: review.content,
-      ...imageMap,
+      hasReview: true,
+      review: {
+        id: review.id,
+        lessonId: review.lessonId,
+        lessonTitle: review.lesson.title,
+        rating: review.rating,
+        content: review.content,
+        ...imageMap,
+      },
     };
   }
 }
