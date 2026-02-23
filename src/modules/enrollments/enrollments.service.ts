@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
 import { MailsService } from '../mails/mails.service';
@@ -30,6 +30,8 @@ type EnrollmentWithRelations = Enrollment & {
 
 @Injectable()
 export class EnrollmentsService {
+  private readonly logger = new Logger(EnrollmentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
@@ -222,7 +224,7 @@ export class EnrollmentsService {
           discountAmount: result.discountAmount,
           finalPrice: result.finalPrice,
         }).catch(err => {
-          console.error('결제 완료 메일 발송 실패:', err);
+          this.logger.error('결제 완료 메일 발송 실패', err.stack);
         });
       }
     }

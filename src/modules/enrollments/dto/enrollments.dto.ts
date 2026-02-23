@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsNumber, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsNumber, IsString, IsEmail } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateEnrollmentDto {
@@ -22,5 +22,6 @@ export class CreateEnrollmentDto {
 
   @IsOptional()
   @IsString()
+  @IsEmail()
   email?: string;
 }
