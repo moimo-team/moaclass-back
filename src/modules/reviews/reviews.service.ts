@@ -171,14 +171,15 @@ export class ReviewsService {
     }
 
     // ✅ 보상 지급 로직 (별도 예외 처리 및 비동기 실행)
+    // 포인트는 리뷰 작성 시 항상 지급하고, 이미지 리뷰는 쿠폰을 추가 지급한다.
+    this.pointsService.earnPoints(userId, 1000).catch((err) => {
+      console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
+    });
+
     const hasImage = !!representativeImage || reviewImages.length > 0;
     if (hasImage) {
       this.couponsService.issueReviewRewardCoupon(userId).catch((err) => {
         console.error(`리뷰 보상 쿠폰 발급 실패 (userId: ${userId}):`, err);
-      });
-    } else {
-      this.pointsService.earnPoints(userId, 1000).catch((err) => {
-        console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
       });
     }
   }
@@ -255,6 +256,16 @@ export class ReviewsService {
       'image7',
       'image8',
     ];
+    const removeImageFlags = [
+      dto.removeImage1 ?? false,
+      dto.removeImage2 ?? false,
+      dto.removeImage3 ?? false,
+      dto.removeImage4 ?? false,
+      dto.removeImage5 ?? false,
+      dto.removeImage6 ?? false,
+      dto.removeImage7 ?? false,
+      dto.removeImage8 ?? false,
+    ];
 
     let nextRepresentativeImage = review.representativeImage;
     const representativeFile = files.image1?.[0];
@@ -263,10 +274,12 @@ export class ReviewsService {
         'review',
         representativeFile,
       );
+    } else if (removeImageFlags[0]) {
+      nextRepresentativeImage = null;
     }
 
     type DetailImageMutation = {
-      mode: 'create' | 'update';
+      mode: 'create' | 'update' | 'delete';
       id?: number;
       sequence: number;
       image: string;
@@ -277,13 +290,25 @@ export class ReviewsService {
     for (let i = 1; i < orderedKeys.length; i += 1) {
       const key = orderedKeys[i];
       const file = files[key]?.[0];
-      if (!file) continue;
-
-      const imageUrl = await this.uploadService.uploadFile('review', file);
       const sequence = i; // image2 -> 1 ... image8 -> 7
       const existing = review.images.find(
         (image) => image.sequence === sequence,
       );
+      const shouldRemove = removeImageFlags[i];
+
+      if (!file) {
+        if (shouldRemove && existing) {
+          imageMutations.push({
+            mode: 'delete',
+            id: existing.id,
+            sequence,
+            image: existing.image,
+          });
+        }
+        continue;
+      }
+
+      const imageUrl = await this.uploadService.uploadFile('review', file);
 
       if (existing) {
         imageMutations.push({
@@ -313,6 +338,13 @@ export class ReviewsService {
         });
 
         for (const mutation of imageMutations) {
+          if (mutation.mode === 'delete' && mutation.id !== undefined) {
+            await tx.reviewImage.delete({
+              where: { id: mutation.id },
+            });
+            continue;
+          }
+
           if (mutation.mode === 'update' && mutation.id !== undefined) {
             await tx.reviewImage.update({
               where: { id: mutation.id },
