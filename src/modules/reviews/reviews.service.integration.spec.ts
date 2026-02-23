@@ -522,7 +522,7 @@ describe('ReviewsService (integration, real DB)', () => {
     );
   });
 
-  it('update: removeImage 플래그로 기존 이미지를 삭제할 수 있다', async () => {
+  it('update: removeSequences로 기존 이미지를 삭제할 수 있다', async () => {
     const { lesson } = await createTeacherAndLesson('update_remove_images');
     const reviewer = await createReviewer('update_remove_images');
     const { enrollment } = await createEnrollment(reviewer.id, lesson.id);
@@ -558,8 +558,7 @@ describe('ReviewsService (integration, real DB)', () => {
       reviewer.id,
       review.id,
       {
-        removeImage1: true,
-        removeImage2: true,
+        removeSequences: [1, 2],
       },
       {},
     );
