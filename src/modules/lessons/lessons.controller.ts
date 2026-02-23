@@ -4,7 +4,7 @@ import {
   Delete,
   Param,
   Body,
-  UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   Put,
   Get,
@@ -14,7 +14,7 @@ import {
   ParseIntPipe,
   HttpCode,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { LessonsService } from './lessons.service';
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { LessonPageOptionsDto } from './dto/lesson-page-options.dto';
@@ -23,6 +23,13 @@ import { JwtPayload } from '../../auth/jwt-payload.interface';
 import { OptionalJwtAuthGuard } from '../../auth/optional-jwt-auth.guard';
 import multer from 'multer';
 
+type LessonUploadFiles = {
+  image1?: Express.Multer.File[];
+  image2?: Express.Multer.File[];
+  image3?: Express.Multer.File[];
+  image4?: Express.Multer.File[];
+};
+
 @Controller('lessons')
 export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
@@ -30,14 +37,22 @@ export class LessonsController {
   @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(
-    FileInterceptor('representativeImage', { storage: multer.memoryStorage() }),
+    FileFieldsInterceptor(
+      [
+        { name: 'image1', maxCount: 1 },
+        { name: 'image2', maxCount: 1 },
+        { name: 'image3', maxCount: 1 },
+        { name: 'image4', maxCount: 1 },
+      ],
+      { storage: multer.memoryStorage() },
+    ),
   )
   async createLesson(
     @Body() dto: CreateLessonDto,
     @Req() req: Request & { user: JwtPayload },
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files: LessonUploadFiles,
   ) {
-    await this.lessonsService.createLesson(req.user.id, dto, file);
+    await this.lessonsService.createLesson(req.user.id, dto, files ?? {});
   }
 
   @Get()
@@ -61,19 +76,27 @@ export class LessonsController {
   @UseGuards(JwtAuthGuard)
   @Put(':lessonId')
   @UseInterceptors(
-    FileInterceptor('representativeImage', { storage: multer.memoryStorage() }),
+    FileFieldsInterceptor(
+      [
+        { name: 'image1', maxCount: 1 },
+        { name: 'image2', maxCount: 1 },
+        { name: 'image3', maxCount: 1 },
+        { name: 'image4', maxCount: 1 },
+      ],
+      { storage: multer.memoryStorage() },
+    ),
   )
   async updateLesson(
     @Param('lessonId') lessonId: string,
     @Body() dto: UpdateLessonDto,
     @Req() req: Request & { user: JwtPayload },
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files: LessonUploadFiles,
   ) {
     await this.lessonsService.updateLesson(
       req.user.id,
       Number(lessonId),
       dto,
-      file,
+      files ?? {},
     );
   }
 
