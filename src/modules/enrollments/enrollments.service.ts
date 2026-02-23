@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { EnrollmentPageOptionsDto } from './dto/enrollents-page-options.dto';
 import { EnrollmentWithTransactions } from 'src/types/enrollment';
+import { CouponsService } from '../coupons/coupons.service';
 
 type EnrollmentWithRelations = Enrollment & {
   schedule: LessonSchedule & {
@@ -33,6 +34,7 @@ export class EnrollmentsService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly mailsService: MailsService,
+    private readonly couponsService: CouponsService,
   ) { }
 
   async createEnrollment(userId: number, dto: CreateEnrollmentDto) {
@@ -72,29 +74,13 @@ export class EnrollmentsService {
 
       // ✅ 쿠폰 검증 및 할인 계산
       if (dto.couponId) {
-        const coupon = await tx.coupon.findUnique({
-          where: { id: dto.couponId },
-        });
-        if (!coupon) {
-          throw new BadRequestException('존재하지 않는 쿠폰입니다.');
-        }
-
-        // ✅ 사용 가능한 userCoupon 여부 확인 (미사용 + 유효기간 내)
-        const now = new Date();
-        const userCoupon = await tx.userCoupon.findFirst({
-          where: {
-            userId,
-            couponId: dto.couponId,
-            usedAt: null,
-            OR: [
-              { expiresAt: null }, // expiresAt이 없으면 항상 유효
-              { expiresAt: { gte: now } }, // expiresAt이 미래면 유효
-            ],
-          },
-        });
-        if (!userCoupon) {
-          throw new BadRequestException('사용 가능한 쿠폰이 없습니다.');
-        }
+        // ✅ 캡슐화된 쿠폰 검증 로직 사용 (트랜잭션 세션 포함)
+        const userCoupon = await this.couponsService.validateUserCoupon(
+          userId,
+          dto.couponId,
+          tx,
+        );
+        const coupon = userCoupon.coupon;
 
         if (coupon.discountType === 'FIXED') {
           discountAmount = coupon.discountValue;
@@ -106,6 +92,7 @@ export class EnrollmentsService {
           calculatedFinalPrice = originPrice - discountAmount;
         }
       }
+
 
       // 🚨 클라이언트가 보낸 finalPrice와 서버 계산값 비교
       if (dto.finalPrice !== calculatedFinalPrice) {

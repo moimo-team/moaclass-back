@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 import { PaymentDetailDto } from './dto/payments.dto';
+import { CouponsService } from '../coupons/coupons.service';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly couponsService: CouponsService,
+  ) { }
 
   async getPaymentPreview(
     scheduleId: number,
@@ -34,29 +38,17 @@ export class PaymentsService {
 
     const subtotal = price * quantity;
 
-    const now = new Date();
-    const availableCoupons = await this.prisma.userCoupon.findMany({
-      where: {
-        userId,
-        isUsed: false,
-        OR: [
-          { expiresAt: null }, // expiresAt이 없으면 항상 유효
-          { expiresAt: { gte: now } }, // ✅ NEW: UserCoupon의 expiresAt 확인
-        ],
-        coupon: {
-          validFrom: { lte: now },
-          validUntil: { gte: now },
-        },
-      },
-      include: { coupon: true },
-    });
+    // ✅ 공통 로직으로 사용 가능한 쿠폰 조회
+    const availableCoupons = (await this.couponsService.getAvailableUserCoupons(
+      userId,
+    )) as any[];
 
     const coupons = availableCoupons.map((uc) => ({
       id: uc.coupon.id,
       description: uc.coupon.description,
       discountType: uc.coupon.discountType,
       discountValue: uc.coupon.discountValue,
-      valid_until: uc.coupon.validUntil,
+      valid_until: uc.expiresAt ?? uc.coupon.validUntil, // 개별 만료일 우선 표시
     }));
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -110,36 +102,22 @@ export class PaymentsService {
     let couponDiscount = 0;
 
     if (couponId) {
-      const now = new Date();
-      // ✅ 사용 가능한 userCoupon 여부 확인 (미사용 + 유효기간 내)
-      const userCoupon = await this.prisma.userCoupon.findFirst({
-        where: {
-          userId,
-          couponId,
-          isUsed: false,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gte: now } },
-          ],
-          coupon: {
-            validFrom: { lte: now },
-            validUntil: { gte: now },
-          },
-        },
-        include: { coupon: true },
-      });
+      // ✅ 캡슐화된 쿠폰 검증 로직 사용
+      const userCoupon = await this.couponsService.validateUserCoupon(
+        userId,
+        couponId,
+      );
 
-      if (userCoupon) {
-        const coupon = userCoupon.coupon;
-        if (coupon.discountType === 'PERCENT') {
-          couponDiscount = Math.floor(subtotal * (coupon.discountValue / 100));
-        } else if (coupon.discountType === 'FIXED') {
-          couponDiscount = coupon.discountValue;
-        }
+      const coupon = userCoupon.coupon;
+      if (coupon.discountType === 'PERCENT') {
+        couponDiscount = Math.floor(subtotal * (coupon.discountValue / 100));
+      } else if (coupon.discountType === 'FIXED') {
+        couponDiscount = coupon.discountValue;
       }
     }
 
     const finalPrice = subtotal - couponDiscount;
+
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const canPay = (user?.point ?? 0) >= finalPrice;
