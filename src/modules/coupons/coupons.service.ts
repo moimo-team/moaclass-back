@@ -364,7 +364,7 @@ export class CouponsService {
         discountType: uc.coupon.discountType,
         discountValue: uc.coupon.discountValue,
         validFrom: formatUtcDateToSeoulDateTime(uc.coupon.validFrom),
-        validUntil: uc.expiresAt ? formatUtcDateToSeoulDateTime(uc.expiresAt) : null,
+        validUntil: formatUtcDateToSeoulDateTime(uc.expiresAt ?? uc.coupon.validUntil),
         isUsed: uc.isUsed,
         usedAt: uc.usedAt ? formatUtcDateToSeoulDateTime(uc.usedAt) : null,
         issuedAt: formatUtcDateToSeoulDateTime(uc.issuedAt),
