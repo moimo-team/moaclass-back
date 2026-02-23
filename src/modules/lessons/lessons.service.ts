@@ -135,6 +135,7 @@ export class LessonsService {
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 10;
     const skip = (page - 1) * limit;
+    const trimmedKeyword = filters.keyword?.trim();
 
     if (filters.isLiked && !userId) {
       return new PageDto([], new PageMetaDto(0, page, limit));
@@ -156,6 +157,24 @@ export class LessonsService {
         filters.categoryId.length > 0 && {
           lessonCategoryId: { in: filters.categoryId },
         }),
+      ...(trimmedKeyword && {
+        OR: [
+          { title: { contains: trimmedKeyword, mode: 'insensitive' } },
+          {
+            lessonCategory: {
+              name: { contains: trimmedKeyword, mode: 'insensitive' },
+            },
+          },
+          {
+            teacher: {
+              nickname: {
+                contains: trimmedKeyword,
+                mode: 'insensitive',
+              },
+            },
+          },
+        ],
+      }),
       ...(filters.subCategoryId &&
         filters.subCategoryId.length > 0 && {
           subCategories: {

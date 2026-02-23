@@ -81,7 +81,10 @@ describe('LessonsService (integration, real DB)', () => {
     await prisma.$disconnect();
   });
 
-  async function createRegionAndCategory() {
+  async function createRegionAndCategory(params?: {
+    regionName?: string;
+    categoryName?: string;
+  }) {
     uniqueSeq += 1;
     const token = uniqueSeq.toString().padStart(6, '0');
 
@@ -95,7 +98,7 @@ describe('LessonsService (integration, real DB)', () => {
       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
       RETURNING id
       `,
-      `r_${token}`,
+      params?.regionName ?? `r_${token}`,
     );
 
     const categoryRows = await prisma.$queryRawUnsafe<Array<{ id: number }>>(
@@ -108,7 +111,7 @@ describe('LessonsService (integration, real DB)', () => {
       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
       RETURNING id
       `,
-      `c_${token}`,
+      params?.categoryName ?? `c_${token}`,
     );
 
     const regionId = regionRows[0]?.id;
@@ -361,5 +364,70 @@ describe('LessonsService (integration, real DB)', () => {
     expect(result.isLiked).toBe(false);
     expect(result.reviewAiSummary).toBe(lesson.reviewAiSummary);
     expect(result.schedules.length).toBeGreaterThan(0);
+  });
+
+  it('getLessons: keyword가 title과 일치하면 해당 클래스만 조회된다', async () => {
+    const keyword = `title_kw_${Date.now()}`;
+    const { regionId, lessonCategoryId } = await createRegionAndCategory();
+    const teacher = await createUser('teacher_keyword_title');
+
+    const matchedLesson = await createLesson({
+      teacherUserId: teacher.id,
+      lessonCategoryId,
+      regionId,
+      suffix: keyword,
+    });
+
+    await createLesson({
+      teacherUserId: teacher.id,
+      lessonCategoryId,
+      regionId,
+      suffix: 'not_matched_title',
+    });
+
+    const result = await service.getLessons({
+      page: 1,
+      limit: 10,
+      userId: teacher.id,
+      keyword,
+    });
+
+    const lessonIds = result.data.map((item) => item.id);
+    expect(lessonIds).toContain(matchedLesson.id);
+    expect(lessonIds.length).toBe(1);
+  });
+
+  it('getLessons: keyword가 category와 teacher nickname에서 모두 동작한다', async () => {
+    const uniqueToken = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const categoryKeyword = `category_kw_${uniqueToken}`;
+    const teacherPrefix = `teacherkw_${uniqueToken}`;
+
+    const { regionId, lessonCategoryId } = await createRegionAndCategory({
+      categoryName: categoryKeyword,
+    });
+    const teacher = await createUser(teacherPrefix);
+
+    const lesson = await createLesson({
+      teacherUserId: teacher.id,
+      lessonCategoryId,
+      regionId,
+      suffix: 'category_match',
+    });
+
+    const categoryResult = await service.getLessons({
+      page: 1,
+      limit: 10,
+      userId: teacher.id,
+      keyword: categoryKeyword,
+    });
+    expect(categoryResult.data.map((item) => item.id)).toContain(lesson.id);
+
+    const nicknameResult = await service.getLessons({
+      page: 1,
+      limit: 10,
+      userId: teacher.id,
+      keyword: teacherPrefix,
+    });
+    expect(nicknameResult.data.map((item) => item.id)).toContain(lesson.id);
   });
 });
