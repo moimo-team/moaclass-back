@@ -369,6 +369,7 @@ export class UsersService {
       data: {
         nickname: dto.nickname,
         bio: dto.bio,
+        regionId: dto.regionId,
         ...(imageUrl ? { image: imageUrl } : {}),
       },
       include: {
@@ -635,7 +636,7 @@ export class UsersService {
   // }
 
   async verifyUser(id: number) {
-    console.log(id);
+
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {

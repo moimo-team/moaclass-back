@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
-// import { CouponsService } from '../coupons/coupons.service';
+import { MailsService } from '../mails/mails.service';
+import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -12,6 +13,7 @@ import {
 } from '@prisma/client';
 import { EnrollmentPageOptionsDto } from './dto/enrollents-page-options.dto';
 import { EnrollmentWithTransactions } from 'src/types/enrollment';
+import { CouponsService } from '../coupons/coupons.service';
 
 type EnrollmentWithRelations = Enrollment & {
   schedule: LessonSchedule & {
@@ -28,10 +30,14 @@ type EnrollmentWithRelations = Enrollment & {
 
 @Injectable()
 export class EnrollmentsService {
+  private readonly logger = new Logger(EnrollmentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-  ) {}
+    private readonly mailsService: MailsService,
+    private readonly couponsService: CouponsService,
+  ) { }
 
   async createEnrollment(userId: number, dto: CreateEnrollmentDto) {
     const result = await this.prisma.$transaction(async (tx) => {
@@ -70,29 +76,13 @@ export class EnrollmentsService {
 
       // ✅ 쿠폰 검증 및 할인 계산
       if (dto.couponId) {
-        const coupon = await tx.coupon.findUnique({
-          where: { id: dto.couponId },
-        });
-        if (!coupon) {
-          throw new BadRequestException('존재하지 않는 쿠폰입니다.');
-        }
-
-        // ✅ 사용 가능한 userCoupon 여부 확인 (미사용 + 유효기간 내)
-        const now = new Date();
-        const userCoupon = await tx.userCoupon.findFirst({
-          where: {
-            userId,
-            couponId: dto.couponId,
-            usedAt: null,
-            OR: [
-              { expiresAt: null }, // expiresAt이 없으면 항상 유효
-              { expiresAt: { gte: now } }, // expiresAt이 미래면 유효
-            ],
-          },
-        });
-        if (!userCoupon) {
-          throw new BadRequestException('사용 가능한 쿠폰이 없습니다.');
-        }
+        // ✅ 캡슐화된 쿠폰 검증 로직 사용 (트랜잭션 세션 포함)
+        const userCoupon = await this.couponsService.validateUserCoupon(
+          userId,
+          dto.couponId,
+          tx,
+        );
+        const coupon = userCoupon.coupon;
 
         if (coupon.discountType === 'FIXED') {
           discountAmount = coupon.discountValue;
@@ -104,6 +94,7 @@ export class EnrollmentsService {
           calculatedFinalPrice = originPrice - discountAmount;
         }
       }
+
 
       // 🚨 클라이언트가 보낸 finalPrice와 서버 계산값 비교
       if (dto.finalPrice !== calculatedFinalPrice) {
@@ -200,13 +191,16 @@ export class EnrollmentsService {
         },
         remainingPoints: updatedUser.point,
         teacherBalance: updatedTeacher.point,
+        originPrice,
+        discountAmount,
+        finalPrice: calculatedFinalPrice,
       };
     });
 
     // ✅ 트랜잭션 성공 후 강사에게 알림 발송 (비동기)
     const schedule = await this.prisma.lessonSchedule.findUnique({
       where: { id: dto.scheduleId },
-      include: { lesson: { select: { title: true, userId: true } } },
+      include: { lesson: { select: { title: true, userId: true, address: true } } },
     });
 
     if (schedule) {
@@ -216,6 +210,23 @@ export class EnrollmentsService {
         type: 'PARTICIPATION_REQUEST', // 수강 신청 알림 타입
         lessonId: schedule.lessonId,
       });
+
+      // ✅ 트랜잭션 성공 후 이메일 발송 (비동기)
+      if (dto.email) {
+        // 이 로직은 result에 담긴 결제 상세 정보를 사용합니다.
+        this.mailsService.sendEnrollmentEmail(dto.email, {
+          title: schedule.lesson.title,
+          startAt: schedule.startAt,
+          endAt: schedule.endAt,
+          address: schedule.lesson.address,
+          quantity: dto.quantity ?? 1,
+          originPrice: result.originPrice,
+          discountAmount: result.discountAmount,
+          finalPrice: result.finalPrice,
+        }).catch(err => {
+          this.logger.error('결제 완료 메일 발송 실패', err.stack);
+        });
+      }
     }
 
     return result;
@@ -290,20 +301,14 @@ export class EnrollmentsService {
 
       const status = this.mapStatus(e, now);
 
-      //       // ✅ 수강 완료 상태이면 재수강 쿠폰 발급 시도 (비동기)
-      //       if (status === '수강완료') {
-      //         this.couponsService.issueRetakeCoupon(userId).catch((err) => {
-      //           console.error(`재수강 쿠폰 발급 실패 (userId: ${userId}):`, err);
-      //         });
-      //       }
 
       return {
         enrollmentId: e.id,
         scheduleId: e.schedule.id,
         image: e.schedule.lesson.representativeImage,
         title: e.schedule.lesson.title,
-        startAt: e.schedule.startAt.toISOString(),
-        endAt: e.schedule.endAt.toISOString(),
+        startAt: formatUtcDateToSeoulDateTime(e.schedule.startAt),
+        endAt: formatUtcDateToSeoulDateTime(e.schedule.endAt),
         status,
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
@@ -483,8 +488,8 @@ export class EnrollmentsService {
         title: schedule.lesson.title,
         teacherName:
           schedule.lesson.teacher.teacherProfile?.nickname ?? '알 수 없음',
-        startAt: schedule.startAt,
-        endAt: schedule.endAt,
+        startAt: formatUtcDateToSeoulDateTime(schedule.startAt),
+        endAt: formatUtcDateToSeoulDateTime(schedule.endAt),
       },
       paymentInfo: {
         originPrice,
@@ -493,11 +498,11 @@ export class EnrollmentsService {
         quantity,
         coupon: useTx?.coupon
           ? {
-              id: useTx.coupon.id,
-              name: useTx.coupon.description,
-              discountType: useTx.coupon.discountType,
-              discountValue: useTx.coupon.discountValue,
-            }
+            id: useTx.coupon.id,
+            name: useTx.coupon.description,
+            discountType: useTx.coupon.discountType,
+            discountValue: useTx.coupon.discountValue,
+          }
           : null,
       },
       refundInfo: {

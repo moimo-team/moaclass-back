@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsNumber } from 'class-validator';
+import { IsInt, IsOptional, IsNumber, IsString, IsEmail } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateEnrollmentDto {
@@ -19,4 +19,9 @@ export class CreateEnrollmentDto {
   @IsInt()
   @Type(() => Number)
   couponId?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsEmail()
+  email?: string;
 }

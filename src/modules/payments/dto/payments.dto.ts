@@ -1,13 +1,13 @@
 export class PaymentDetailDto {
   orderId: number;
   transactionStatus: string; // COMPLETED, PENDING, FAILED, CANCELED
-  paymentDate: Date;
+  paymentDate: string;
 
   classInfo: {
     title: string;
     teacherName: string;
-    startAt: Date;
-    endAt: Date;
+    startAt: string;
+    endAt: string;
   };
 
   paymentInfo: {
@@ -27,7 +27,7 @@ export class PaymentDetailDto {
     deductedAmount: number;
     refundAmount: number;
     paidAmount: number;
-    refundDate: Date;
+    refundDate: string;
     reason: string;
     detailReason: string;
   } | null;

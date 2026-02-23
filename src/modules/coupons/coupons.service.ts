@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-
+import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
 @Injectable()
 export class CouponsService {
   constructor(private readonly prisma: PrismaService) { }
@@ -13,12 +13,25 @@ export class CouponsService {
   async getCoupon(id: number) {
     const coupon = await this.prisma.coupon.findUnique({ where: { id } });
     if (!coupon) throw new NotFoundException('쿠폰을 찾을 수 없습니다.');
-    return coupon;
+    return {
+      ...coupon,
+      validFrom: formatUtcDateToSeoulDateTime(coupon.validFrom),
+      validUntil: formatUtcDateToSeoulDateTime(coupon.validUntil),
+      createdAt: formatUtcDateToSeoulDateTime(coupon.createdAt),
+      updatedAt: formatUtcDateToSeoulDateTime(coupon.updatedAt),
+    };
   }
 
   // 2. 전체 쿠폰 조회
   async getAllCoupons() {
-    return this.prisma.coupon.findMany();
+    const coupons = await this.prisma.coupon.findMany();
+    return coupons.map((coupon) => ({
+      ...coupon,
+      validFrom: formatUtcDateToSeoulDateTime(coupon.validFrom),
+      validUntil: formatUtcDateToSeoulDateTime(coupon.validUntil),
+      createdAt: formatUtcDateToSeoulDateTime(coupon.createdAt),
+      updatedAt: formatUtcDateToSeoulDateTime(coupon.updatedAt),
+    }));
   }
 
   // 3. 쿠폰 생성
@@ -350,13 +363,72 @@ export class CouponsService {
         description: uc.coupon.description,
         discountType: uc.coupon.discountType,
         discountValue: uc.coupon.discountValue,
-        validFrom: uc.coupon.validFrom,
-        validUntil: uc.coupon.validUntil,
+        validFrom: formatUtcDateToSeoulDateTime(uc.coupon.validFrom),
+        validUntil: formatUtcDateToSeoulDateTime(uc.expiresAt ?? uc.coupon.validUntil),
         isUsed: uc.isUsed,
-        usedAt: uc.usedAt,
-        issuedAt: uc.issuedAt,
+        usedAt: uc.usedAt ? formatUtcDateToSeoulDateTime(uc.usedAt) : null,
+        issuedAt: formatUtcDateToSeoulDateTime(uc.issuedAt),
         status,
       };
     });
+  }
+
+  // ✅ NEW: 사용 가능한(미사용 & 유효기간 내) 쿠폰 목록 조회
+  async getAvailableUserCoupons(userId: number) {
+    const now = new Date();
+    return this.prisma.userCoupon.findMany({
+      where: {
+        userId,
+        isUsed: false,
+        NOT: {
+          expiresAt: { lt: now }, // expiresAt이 현재보다 전이면 제외 (null은 포함)
+        },
+        coupon: {
+          validFrom: { lte: now },
+          NOT: {
+            validUntil: { lt: now }, // validUntil이 현재보다 전이면 제외 (null은 포함)
+          },
+        },
+      },
+      include: { coupon: true },
+    });
+  }
+
+  // ✅ NEW: 공통 쿠폰 유효성 검증 로직
+  async validateUserCoupon(userId: number, couponId: number, tx?: any) {
+    const prisma = tx || this.prisma;
+    const now = new Date();
+
+    const userCoupon = await prisma.userCoupon.findFirst({
+      where: {
+        userId,
+        couponId,
+      },
+      include: { coupon: true },
+    });
+
+    if (!userCoupon) {
+      throw new BadRequestException('보유하고 있지 않은 쿠폰입니다.');
+    }
+
+    if (userCoupon.isUsed || userCoupon.usedAt) {
+      throw new BadRequestException('이미 사용된 쿠폰입니다.');
+    }
+
+    // 1. UserCoupon의 자체 만료 기간(expiresAt) 확인
+    if (userCoupon.expiresAt && userCoupon.expiresAt < now) {
+      throw new BadRequestException('만료된 쿠폰입니다.');
+    }
+
+    // 2. Coupon의 전체 유효 기간(validFrom, validUntil) 확인
+    if (userCoupon.coupon.validFrom && userCoupon.coupon.validFrom > now) {
+      throw new BadRequestException('아직 사용 가능 기간이 아닌 쿠폰입니다.');
+    }
+
+    if (userCoupon.coupon.validUntil && userCoupon.coupon.validUntil < now) {
+      throw new BadRequestException('사용 기간이 만료된 쿠폰입니다.');
+    }
+
+    return userCoupon;
   }
 }
