@@ -305,6 +305,7 @@ export class EnrollmentsService {
       return {
         enrollmentId: e.id,
         scheduleId: e.schedule.id,
+        lessonId: e.schedule.lessonId,
         image: e.schedule.lesson.representativeImage,
         title: e.schedule.lesson.title,
         startAt: formatUtcDateToSeoulDateTime(e.schedule.startAt),
@@ -392,7 +393,7 @@ export class EnrollmentsService {
           type: 'REFUND',
           status: 'COMPLETED',
           reason: reason ?? '수강 취소 환불',
-          detailReason: `환불율 ${refundRate * 100}% 적용`,
+          detailReason: detailReason ? `${detailReason}\n환불율 ${refundRate * 100}% 적용` : `환불율 ${refundRate * 100}% 적용`,
         },
       });
 
