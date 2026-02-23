@@ -199,6 +199,11 @@ export class LessonPageOptionsDto extends PageOptionsDto {
   finishedFilter?: boolean = false;
 
   @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }): boolean => value === 'true' || value === true)
+  isLiked?: boolean = false;
+
+  @IsOptional()
   @IsNumber()
   @Type(() => Number)
   userId?: number;

@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service'; // PrismaService를 주입받는다고 가정
+import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLessonDto, UpdateLessonDto } from './dto/lesson.dto';
 import { CreateScheduleDto, UpdateScheduleDto } from './dto/schedule.dto';
 import { Prisma } from '@prisma/client';
@@ -37,7 +37,7 @@ export class LessonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) { }
+  ) {}
 
   private async resolveCoordinatesFromAddress(address: string) {
     try {
@@ -131,10 +131,14 @@ export class LessonsService {
     throw new BadRequestException('대표 이미지를 업로드해야 합니다.');
   }
 
-  async getLessons(filters: LessonPageOptionsDto) {
+  async getLessons(filters: LessonPageOptionsDto, userId?: number) {
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 10;
     const skip = (page - 1) * limit;
+
+    if (filters.isLiked && !userId) {
+      return new PageDto([], new PageMetaDto(0, page, limit));
+    }
 
     const where: Prisma.LessonWhereInput = {
       status: {
@@ -146,18 +150,18 @@ export class LessonsService {
       ...(filters.userId && { userId: filters.userId }),
       ...(filters.regionId &&
         filters.regionId.length > 0 && {
-        regionId: { in: filters.regionId },
-      }),
+          regionId: { in: filters.regionId },
+        }),
       ...(filters.categoryId &&
         filters.categoryId.length > 0 && {
-        lessonCategoryId: { in: filters.categoryId },
-      }),
+          lessonCategoryId: { in: filters.categoryId },
+        }),
       ...(filters.subCategoryId &&
         filters.subCategoryId.length > 0 && {
-        subCategories: {
-          some: { subCategoryId: { in: filters.subCategoryId } },
-        },
-      }),
+          subCategories: {
+            some: { subCategoryId: { in: filters.subCategoryId } },
+          },
+        }),
       ...(filters.level &&
         filters.level.length > 0 && { level: { in: filters.level } }),
       ...(filters.minParticipants && {
@@ -168,6 +172,12 @@ export class LessonsService {
       }),
       ...(filters.minPrice && { price: { gte: filters.minPrice } }),
       ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
+      ...(filters.isLiked &&
+        userId && {
+          wishlists: {
+            some: { userId },
+          },
+        }),
     };
 
     const orderBy: Prisma.LessonOrderByWithRelationInput = (() => {
@@ -263,6 +273,11 @@ export class LessonsService {
       );
 
       const pagedLessons = filteredLessons.slice(skip, skip + limit);
+      const likedLessonIdSet = await this.getLikedLessonIdSet(
+        userId,
+        pagedLessons.map((lesson) => lesson.id),
+      );
+
       const data = pagedLessons.map((lesson) => {
         const {
           durationSec,
@@ -273,6 +288,7 @@ export class LessonsService {
         } = lesson;
         return {
           ...restLesson,
+          isLiked: likedLessonIdSet.has(lesson.id),
           durationMin: Math.floor(durationSec / 60),
           lessonCategoryName: lessonCategory.name,
           regionName: region.name,
@@ -303,6 +319,11 @@ export class LessonsService {
       }),
     ]);
 
+    const likedLessonIdSet = await this.getLikedLessonIdSet(
+      userId,
+      lessons.map((lesson) => lesson.id),
+    );
+
     const data = lessons.map((lesson) => {
       const {
         durationSec,
@@ -313,6 +334,7 @@ export class LessonsService {
       } = lesson;
       return {
         ...restLesson,
+        isLiked: likedLessonIdSet.has(lesson.id),
         durationMin: Math.floor(durationSec / 60),
         lessonCategoryName: lessonCategory.name,
         regionName: region.name,
@@ -329,7 +351,7 @@ export class LessonsService {
     return new PageDto(data, new PageMetaDto(totalCount, page, limit));
   }
 
-  async getLessonDetail(lessonId: number) {
+  async getLessonDetail(lessonId: number, userId?: number) {
     const lesson = await this.prisma.lesson.findFirst({
       where: {
         id: lessonId,
@@ -380,6 +402,10 @@ export class LessonsService {
     if (!lesson) {
       throw new NotFoundException(`Lesson with id ${lessonId} not found`);
     }
+
+    const likedLessonIdSet = await this.getLikedLessonIdSet(userId, [
+      lesson.id,
+    ]);
     const {
       durationSec,
       lessonCategory,
@@ -389,6 +415,7 @@ export class LessonsService {
     } = lesson;
     return {
       ...restLesson,
+      isLiked: likedLessonIdSet.has(lesson.id),
       durationMin: Math.floor(durationSec / 60),
       lessonCategoryName: lessonCategory.name,
       regionName: region.name,
@@ -543,6 +570,25 @@ export class LessonsService {
     return this.prisma.lessonImage.delete({
       where: { id: Number(imageId) },
     });
+  }
+
+  private async getLikedLessonIdSet(
+    userId: number | undefined,
+    lessonIds: number[],
+  ): Promise<Set<number>> {
+    if (!userId || lessonIds.length === 0) {
+      return new Set<number>();
+    }
+
+    const wishlists = await this.prisma.wishlist.findMany({
+      where: {
+        userId,
+        lessonId: { in: lessonIds },
+      },
+      select: { lessonId: true },
+    });
+
+    return new Set(wishlists.map((wishlist) => wishlist.lessonId));
   }
 }
 export function toLessonScheduleCreateInput(

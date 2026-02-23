@@ -47,7 +47,7 @@ export class LikesService {
         }
       }
       throw new InternalServerErrorException(
-        '위시리스트 추가 중 오류가 발생했습니다.',
+        '위시리스트 추가 중 서버 오류가 발생했습니다.',
       );
     }
   }
@@ -80,7 +80,7 @@ export class LikesService {
         }
       }
       throw new InternalServerErrorException(
-        '위시리스트 삭제 중 오류가 발생했습니다.',
+        '위시리스트 삭제 중 서버 오류가 발생했습니다.',
       );
     }
   }
@@ -118,9 +118,10 @@ export class LikesService {
 
         return {
           lessonId: lesson.id,
+          isLiked: true,
           title: lesson.title,
           image: lesson.representativeImage,
-          categoryName: lesson.lessonCategory?.name ?? '미지정',
+          categoryName: lesson.lessonCategory?.name ?? '미지정 카테고리',
           teacherNickname:
             lesson.teacher?.teacherProfile?.nickname ?? '익명 강사',
           regionName: lesson.region?.name ?? '지역 정보 없음',
