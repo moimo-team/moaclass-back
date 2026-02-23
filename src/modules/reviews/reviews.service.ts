@@ -256,16 +256,7 @@ export class ReviewsService {
       'image7',
       'image8',
     ];
-    const removeImageFlags = [
-      dto.removeImage1 ?? false,
-      dto.removeImage2 ?? false,
-      dto.removeImage3 ?? false,
-      dto.removeImage4 ?? false,
-      dto.removeImage5 ?? false,
-      dto.removeImage6 ?? false,
-      dto.removeImage7 ?? false,
-      dto.removeImage8 ?? false,
-    ];
+    const removeSequenceSet = new Set(dto.removeSequences ?? []);
 
     let nextRepresentativeImage = review.representativeImage;
     const representativeFile = files.image1?.[0];
@@ -274,7 +265,7 @@ export class ReviewsService {
         'review',
         representativeFile,
       );
-    } else if (removeImageFlags[0]) {
+    } else if (removeSequenceSet.has(1)) {
       nextRepresentativeImage = null;
     }
 
@@ -294,7 +285,7 @@ export class ReviewsService {
       const existing = review.images.find(
         (image) => image.sequence === sequence,
       );
-      const shouldRemove = removeImageFlags[i];
+      const shouldRemove = removeSequenceSet.has(i + 1);
 
       if (!file) {
         if (shouldRemove && existing) {

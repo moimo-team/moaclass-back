@@ -1,25 +1,14 @@
 import { Transform } from 'class-transformer';
 import {
-  IsBoolean,
+  ArrayUnique,
+  IsArray,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   Max,
   Min,
 } from 'class-validator';
-
-function toBoolean({ value }: { value: unknown }) {
-  if (typeof value === 'boolean') return value;
-
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-
-    if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
-    if (['false', '0', 'no', 'off', ''].includes(normalized)) return false;
-  }
-
-  return value;
-}
 
 export class UpdateReviewDto {
   @IsOptional()
@@ -34,42 +23,39 @@ export class UpdateReviewDto {
   content?: string;
 
   @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage1?: boolean;
+  @IsArray()
+  @ArrayUnique()
+  @Transform(({ value }: { value: unknown }) => {
+    if (Array.isArray(value)) {
+      return value.map((item: unknown) => Number(item));
+    }
 
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage2?: boolean;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
 
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage3?: boolean;
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed: unknown = JSON.parse(trimmed);
+          return Array.isArray(parsed)
+            ? parsed.map((item: unknown) => Number(item))
+            : value;
+        } catch {
+          return value;
+        }
+      }
 
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage4?: boolean;
+      if (trimmed.includes(',')) {
+        return trimmed.split(',').map((item) => Number(item.trim()));
+      }
 
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage5?: boolean;
+      return [Number(trimmed)];
+    }
 
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage6?: boolean;
-
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage7?: boolean;
-
-  @IsOptional()
-  @Transform(toBoolean)
-  @IsBoolean()
-  removeImage8?: boolean;
+    return value;
+  })
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(8, { each: true })
+  removeSequences?: number[];
 }
