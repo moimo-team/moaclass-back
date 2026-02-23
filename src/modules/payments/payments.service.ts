@@ -48,7 +48,7 @@ export class PaymentsService {
       description: uc.coupon.description,
       discountType: uc.coupon.discountType,
       discountValue: uc.coupon.discountValue,
-      valid_until: uc.expiresAt ?? uc.coupon.validUntil, // 개별 만료일 우선 표시
+      validUntil: uc.expiresAt ?? uc.coupon.validUntil, // 개별 만료일 우선 표시
     }));
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
