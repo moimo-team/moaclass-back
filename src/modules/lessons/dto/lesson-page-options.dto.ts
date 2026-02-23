@@ -5,10 +5,12 @@ import {
   IsBoolean,
   IsArray,
   Matches,
+  IsString,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PageOptionsDto } from '../../common/dto/page-options.dto';
 import { Level, LessonStatus } from '@prisma/client';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum LessonSort {
   LATEST = 'LATEST',
@@ -28,6 +30,14 @@ export enum LessonDay {
 }
 
 export class LessonPageOptionsDto extends PageOptionsDto {
+  @ApiPropertyOptional({
+    description: 'Search keyword (title, category name, teacher nickname)',
+    example: '영어',
+  })
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
   @IsOptional()
   @IsArray()
   @IsNumber({}, { each: true })

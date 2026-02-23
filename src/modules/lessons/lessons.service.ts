@@ -156,6 +156,24 @@ export class LessonsService {
         filters.categoryId.length > 0 && {
           lessonCategoryId: { in: filters.categoryId },
         }),
+      ...(filters.keyword?.trim() && {
+        OR: [
+          { title: { contains: filters.keyword.trim(), mode: 'insensitive' } },
+          {
+            lessonCategory: {
+              name: { contains: filters.keyword.trim(), mode: 'insensitive' },
+            },
+          },
+          {
+            teacher: {
+              nickname: {
+                contains: filters.keyword.trim(),
+                mode: 'insensitive',
+              },
+            },
+          },
+        ],
+      }),
       ...(filters.subCategoryId &&
         filters.subCategoryId.length > 0 && {
           subCategories: {
