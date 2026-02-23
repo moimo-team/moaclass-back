@@ -16,6 +16,9 @@ describe('MomentoesService (integration, real DB)', () => {
   let runKey: string;
   const userIds: number[] = [];
   const profileUserIds: number[] = [];
+  const lessonIds: number[] = [];
+  const lessonCategoryIds: number[] = [];
+  const regionIds: number[] = [];
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) {
@@ -33,6 +36,13 @@ describe('MomentoesService (integration, real DB)', () => {
   afterEach(async () => {
     uploadService.uploadFile.mockReset();
 
+    if (lessonIds.length > 0) {
+      await prisma.lesson.deleteMany({
+        where: { id: { in: lessonIds } },
+      });
+      lessonIds.length = 0;
+    }
+
     if (profileUserIds.length > 0) {
       await prisma.teacherProfile.deleteMany({
         where: { userId: { in: profileUserIds } },
@@ -43,6 +53,20 @@ describe('MomentoesService (integration, real DB)', () => {
     if (userIds.length > 0) {
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
       userIds.length = 0;
+    }
+
+    if (lessonCategoryIds.length > 0) {
+      await prisma.lessonCategory.deleteMany({
+        where: { id: { in: lessonCategoryIds } },
+      });
+      lessonCategoryIds.length = 0;
+    }
+
+    if (regionIds.length > 0) {
+      await prisma.region.deleteMany({
+        where: { id: { in: regionIds } },
+      });
+      regionIds.length = 0;
     }
   });
 
@@ -355,5 +379,71 @@ describe('MomentoesService (integration, real DB)', () => {
     await expect(service.remove(user.id)).rejects.toThrow(
       '삭제할 모멘토 프로필이 존재하지 않습니다.',
     );
+  });
+  it('remove: 클래스가 있으면 ConflictException을 던지고 프로필을 삭제하지 않는다', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `${runKey}_u5@example.com`,
+        nickname: `${runKey}_u5`,
+        provider: 'GOOGLE',
+        providerId: `${runKey}_provider_5`,
+      },
+    });
+    userIds.push(user.id);
+
+    await prisma.teacherProfile.create({
+      data: {
+        userId: user.id,
+        nickname: `${runKey}_teacher_5`,
+        image: 'https://example.com/teacher-5.png',
+        introduction: 'teacher intro 5',
+      },
+    });
+    profileUserIds.push(user.id);
+
+    const category = await prisma.lessonCategory.create({
+      data: {
+        name: `${runKey}_lesson_category_5`,
+      },
+    });
+    lessonCategoryIds.push(category.id);
+
+    const region = await prisma.region.create({
+      data: {
+        name: `${runKey}_region_5`,
+      },
+    });
+    regionIds.push(region.id);
+
+    const lesson = await prisma.lesson.create({
+      data: {
+        userId: user.id,
+        lessonCategoryId: category.id,
+        title: `${runKey}_lesson_5`,
+        description: 'lesson desc 5',
+        level: 'BEGINNER',
+        durationSec: 3600,
+        curriculum: 'curriculum 5',
+        maxParticipants: 10,
+        representativeImage: 'https://example.com/lesson-5.png',
+        regionId: region.id,
+        address: 'Seoul address',
+        latitude: 37.5665,
+        longitude: 126.978,
+        detailAddress: 'detail',
+        directionsText: 'directions',
+        status: 'ACTIVE',
+      },
+    });
+    lessonIds.push(lesson.id);
+
+    await expect(service.remove(user.id)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+
+    const profile = await prisma.teacherProfile.findUnique({
+      where: { userId: user.id },
+    });
+    expect(profile).not.toBeNull();
   });
 });
