@@ -37,6 +37,8 @@ type LessonUploadFiles = {
   image2?: Express.Multer.File[];
   image3?: Express.Multer.File[];
   image4?: Express.Multer.File[];
+  image5?: Express.Multer.File[];
+  image6?: Express.Multer.File[];
 };
 
 @Injectable()
@@ -95,6 +97,8 @@ export class LessonsService {
       files.image2?.[0],
       files.image3?.[0],
       files.image4?.[0],
+      files.image5?.[0],
+      files.image6?.[0],
     ].filter((file): file is Express.Multer.File => !!file);
 
     if (representativeFile) {
@@ -594,7 +598,7 @@ export class LessonsService {
     const existingDetailImages = await this.prisma.lessonImage.findMany({
       where: {
         lessonId,
-        sequence: { in: [1, 2, 3] },
+        sequence: { in: [1, 2, 3, 4, 5] },
       },
       orderBy: { id: 'asc' },
     });
@@ -609,11 +613,9 @@ export class LessonsService {
       }
     }
 
-    const detailKeys: Array<'image2' | 'image3' | 'image4'> = [
-      'image2',
-      'image3',
-      'image4',
-    ];
+    const detailKeys: Array<
+      'image2' | 'image3' | 'image4' | 'image5' | 'image6'
+    > = ['image2', 'image3', 'image4', 'image5', 'image6'];
     const imageMutations: DetailImageMutation[] = [];
 
     for (let i = 0; i < detailKeys.length; i += 1) {

@@ -149,7 +149,7 @@ export class UpdateLessonDto extends PartialType(CreateLessonDto) {
   })
   @IsInt({ each: true })
   @Min(1, { each: true })
-  @Max(4, { each: true })
+  @Max(6, { each: true })
   @IsNotEmpty({ each: true })
   @Type(() => Number)
   removeSequences?: number[];

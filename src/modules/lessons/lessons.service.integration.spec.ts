@@ -241,7 +241,7 @@ describe('LessonsService (integration, real DB)', () => {
     wishlistRows.push({ userId, lessonId });
   }
 
-  it('createLesson: saves lesson_images when image1~image4 files are provided', async () => {
+  it('createLesson: saves lesson_images when image1~image6 files are provided', async () => {
     const { regionId, lessonCategoryId, token } =
       await createRegionAndCategory();
     const teacher = await createUser('teacher_create_multi_images');
@@ -262,7 +262,9 @@ describe('LessonsService (integration, real DB)', () => {
     uploadService.uploadFile
       .mockResolvedValueOnce('https://example.com/rep.png')
       .mockResolvedValueOnce('https://example.com/detail-1.png')
-      .mockResolvedValueOnce('https://example.com/detail-2.png');
+      .mockResolvedValueOnce('https://example.com/detail-2.png')
+      .mockResolvedValueOnce('https://example.com/detail-4.png')
+      .mockResolvedValueOnce('https://example.com/detail-5.png');
 
     const makeFile = (name: string) =>
       ({
@@ -291,6 +293,8 @@ describe('LessonsService (integration, real DB)', () => {
         image1: [makeFile('rep.png')],
         image2: [makeFile('detail1.png')],
         image3: [makeFile('detail2.png')],
+        image5: [makeFile('detail4.png')],
+        image6: [makeFile('detail5.png')],
       },
     );
 
@@ -309,15 +313,19 @@ describe('LessonsService (integration, real DB)', () => {
     lessonIds.push(created.id);
 
     expect(created.representativeImage).toBe('https://example.com/rep.png');
-    expect(created.images).toHaveLength(2);
+    expect(created.images).toHaveLength(4);
     expect(created.images[0]?.sequence).toBe(1);
     expect(created.images[0]?.image).toBe('https://example.com/detail-1.png');
     expect(created.images[1]?.sequence).toBe(2);
     expect(created.images[1]?.image).toBe('https://example.com/detail-2.png');
+    expect(created.images[2]?.sequence).toBe(3);
+    expect(created.images[2]?.image).toBe('https://example.com/detail-4.png');
+    expect(created.images[3]?.sequence).toBe(4);
+    expect(created.images[3]?.image).toBe('https://example.com/detail-5.png');
 
     resolveSpy.mockRestore();
   });
-  it('updateLesson: image1~image4 and removeSequences are applied with file priority', async () => {
+  it('updateLesson: image1~image6 and removeSequences are applied with file priority', async () => {
     const { regionId, lessonCategoryId } = await createRegionAndCategory();
     const teacher = await createUser('teacher_update_images');
 
@@ -340,12 +348,18 @@ describe('LessonsService (integration, real DB)', () => {
           sequence: 2,
           image: 'https://example.com/before-image3.png',
         },
+        {
+          lessonId: lesson.id,
+          sequence: 5,
+          image: 'https://example.com/before-image6.png',
+        },
       ],
     });
 
     uploadService.uploadFile
       .mockResolvedValueOnce('https://example.com/after-rep.png')
-      .mockResolvedValueOnce('https://example.com/after-image2.png');
+      .mockResolvedValueOnce('https://example.com/after-image2.png')
+      .mockResolvedValueOnce('https://example.com/after-image6.png');
 
     const makeFile = (name: string) =>
       ({
@@ -358,11 +372,12 @@ describe('LessonsService (integration, real DB)', () => {
       teacher.id,
       lesson.id,
       {
-        removeSequences: [1, 3],
+        removeSequences: [1, 3, 6],
       },
       {
         image1: [makeFile('rep.png')],
         image2: [makeFile('detail2.png')],
+        image6: [makeFile('detail6.png')],
       },
     );
 
@@ -381,10 +396,14 @@ describe('LessonsService (integration, real DB)', () => {
     expect(updated.representativeImage).toBe(
       'https://example.com/after-rep.png',
     );
-    expect(updated.images).toHaveLength(1);
+    expect(updated.images).toHaveLength(2);
     expect(updated.images[0]?.sequence).toBe(1);
     expect(updated.images[0]?.image).toBe(
       'https://example.com/after-image2.png',
+    );
+    expect(updated.images[1]?.sequence).toBe(5);
+    expect(updated.images[1]?.image).toBe(
+      'https://example.com/after-image6.png',
     );
   });
   it('getLessons: 비로그인(userId 없음)이면 isLiked는 false다', async () => {

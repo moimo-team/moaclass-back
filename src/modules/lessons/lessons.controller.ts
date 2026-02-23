@@ -28,6 +28,8 @@ type LessonUploadFiles = {
   image2?: Express.Multer.File[];
   image3?: Express.Multer.File[];
   image4?: Express.Multer.File[];
+  image5?: Express.Multer.File[];
+  image6?: Express.Multer.File[];
 };
 
 @Controller('lessons')
@@ -43,6 +45,8 @@ export class LessonsController {
         { name: 'image2', maxCount: 1 },
         { name: 'image3', maxCount: 1 },
         { name: 'image4', maxCount: 1 },
+        { name: 'image5', maxCount: 1 },
+        { name: 'image6', maxCount: 1 },
       ],
       { storage: multer.memoryStorage() },
     ),
@@ -82,6 +86,8 @@ export class LessonsController {
         { name: 'image2', maxCount: 1 },
         { name: 'image3', maxCount: 1 },
         { name: 'image4', maxCount: 1 },
+        { name: 'image5', maxCount: 1 },
+        { name: 'image6', maxCount: 1 },
       ],
       { storage: multer.memoryStorage() },
     ),
