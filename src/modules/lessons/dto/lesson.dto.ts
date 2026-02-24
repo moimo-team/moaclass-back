@@ -4,9 +4,12 @@ import {
   IsOptional,
   IsEnum,
   IsArray,
+  ArrayUnique,
   ArrayMinSize,
   ArrayMaxSize,
   IsNotEmpty,
+  Min,
+  Max,
 } from 'class-validator';
 import { Level, LessonStatus } from '@prisma/client';
 import { PartialType } from '@nestjs/mapped-types';
@@ -37,9 +40,9 @@ export class CreateLessonDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(3)
   @IsInt({ each: true })
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (Array.isArray(value)) {
-      return value.map((item) => Number(item));
+      return value.map((item: unknown) => Number(item));
     }
 
     if (typeof value === 'string') {
@@ -47,9 +50,9 @@ export class CreateLessonDto {
 
       if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
         try {
-          const parsed = JSON.parse(trimmed);
+          const parsed: unknown = JSON.parse(trimmed);
           return Array.isArray(parsed)
-            ? parsed.map((item) => Number(item))
+            ? parsed.map((item: unknown) => Number(item))
             : value;
         } catch {
           return value;
@@ -110,4 +113,44 @@ export class CreateLessonDto {
   reservationLeadDays?: number;
 }
 
-export class UpdateLessonDto extends PartialType(CreateLessonDto) { }
+export class UpdateLessonDto extends PartialType(CreateLessonDto) {
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @Transform(({ value }: { value: unknown }) => {
+    if (Array.isArray(value)) {
+      return value.map((item: unknown) => Number(item));
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+
+      if (!trimmed) return [];
+
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed: unknown = JSON.parse(trimmed);
+          return Array.isArray(parsed)
+            ? parsed.map((item: unknown) => Number(item))
+            : value;
+        } catch {
+          return value;
+        }
+      }
+
+      if (trimmed.includes(',')) {
+        return trimmed.split(',').map((item) => Number(item.trim()));
+      }
+
+      return [Number(trimmed)];
+    }
+
+    return value;
+  })
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(6, { each: true })
+  @IsNotEmpty({ each: true })
+  @Type(() => Number)
+  removeSequences?: number[];
+}

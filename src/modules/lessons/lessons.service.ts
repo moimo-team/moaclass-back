@@ -32,6 +32,15 @@ interface KakaoAddressResponse {
   documents: KakaoAddressDocument[];
 }
 
+type LessonUploadFiles = {
+  image1?: Express.Multer.File[];
+  image2?: Express.Multer.File[];
+  image3?: Express.Multer.File[];
+  image4?: Express.Multer.File[];
+  image5?: Express.Multer.File[];
+  image6?: Express.Multer.File[];
+};
+
 @Injectable()
 export class LessonsService {
   constructor(
@@ -76,13 +85,23 @@ export class LessonsService {
   async createLesson(
     userId: number,
     dto: CreateLessonDto,
-    file?: Express.Multer.File,
+    fileOrFiles?: Express.Multer.File | LessonUploadFiles,
   ) {
     const { latitude, longitude } = await this.resolveCoordinatesFromAddress(
       dto.address,
     );
 
-    if (file) {
+    const files = this.normalizeCreateFiles(fileOrFiles);
+    const representativeFile = files.image1?.[0];
+    const detailFiles = [
+      files.image2?.[0],
+      files.image3?.[0],
+      files.image4?.[0],
+      files.image5?.[0],
+      files.image6?.[0],
+    ].filter((file): file is Express.Multer.File => !!file);
+
+    if (representativeFile) {
       const { durationMin, subCategoryIds, ...restDto } = dto;
       const uniqueSubCategoryIds = [...new Set(subCategoryIds)];
       if (uniqueSubCategoryIds.length < 1 || uniqueSubCategoryIds.length > 3) {
@@ -105,7 +124,16 @@ export class LessonsService {
         );
       }
 
-      const imageUrl = await this.uploadService.uploadFile('lesson', file);
+      const representativeImageUrl = await this.uploadService.uploadFile(
+        'lesson',
+        representativeFile,
+      );
+      const detailImageUrls = await Promise.all(
+        detailFiles.map((detailFile) =>
+          this.uploadService.uploadFile('lesson', detailFile),
+        ),
+      );
+
       await this.prisma.$transaction(async (tx) => {
         const lesson = await tx.lesson.create({
           data: {
@@ -115,7 +143,7 @@ export class LessonsService {
             longitude,
             userId,
             status: dto.status ?? 'DRAFT',
-            representativeImage: imageUrl,
+            representativeImage: representativeImageUrl,
           },
         });
 
@@ -125,10 +153,44 @@ export class LessonsService {
             subCategoryId,
           })),
         });
+
+        if (detailImageUrls.length > 0) {
+          await tx.lessonImage.createMany({
+            data: detailImageUrls.map((image, index) => ({
+              lessonId: lesson.id,
+              image,
+              sequence: index + 1,
+            })),
+          });
+        }
       });
       return;
     }
     throw new BadRequestException('대표 이미지를 업로드해야 합니다.');
+  }
+
+  private normalizeCreateFiles(
+    fileOrFiles?: Express.Multer.File | LessonUploadFiles,
+  ): LessonUploadFiles {
+    if (!fileOrFiles) {
+      return {};
+    }
+
+    if (this.isMulterFile(fileOrFiles)) {
+      return { image1: [fileOrFiles] };
+    }
+
+    return fileOrFiles;
+  }
+
+  private isMulterFile(value: unknown): value is Express.Multer.File {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'buffer' in value &&
+      'mimetype' in value &&
+      'originalname' in value
+    );
   }
 
   async getLessons(filters: LessonPageOptionsDto, userId?: number) {
@@ -452,7 +514,7 @@ export class LessonsService {
     userId: number,
     lessonId: number,
     dto: UpdateLessonDto,
-    file?: Express.Multer.File,
+    fileOrFiles?: Express.Multer.File | LessonUploadFiles,
   ) {
     const existingLesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
@@ -471,7 +533,13 @@ export class LessonsService {
       throw new ForbiddenException('본인의 클래스만 수정할 수 있습니다.');
     }
 
-    const { durationMin, subCategoryIds, address, ...restDto } = dto;
+    const {
+      durationMin,
+      subCategoryIds,
+      address,
+      removeSequences,
+      ...restDto
+    } = dto;
 
     const nextCategoryId =
       dto.lessonCategoryId ?? existingLesson.lessonCategoryId;
@@ -506,10 +574,83 @@ export class LessonsService {
       }
     }
 
-    let imageUrl: string | undefined;
-    if (file) {
-      imageUrl = await this.uploadService.uploadFile('lesson', file);
-      console.log('파일업로드 완료');
+    const files = this.normalizeCreateFiles(fileOrFiles);
+    const removeSequenceSet = new Set(removeSequences ?? []);
+
+    const representativeFile = files.image1?.[0];
+    let nextRepresentativeImage: string | undefined;
+    if (representativeFile) {
+      nextRepresentativeImage = await this.uploadService.uploadFile(
+        'lesson',
+        representativeFile,
+      );
+    } else if (removeSequenceSet.has(1)) {
+      nextRepresentativeImage = '';
+    }
+
+    type DetailImageMutation = {
+      mode: 'create' | 'update' | 'delete';
+      id?: number;
+      sequence: number;
+      image?: string;
+    };
+
+    const existingDetailImages = await this.prisma.lessonImage.findMany({
+      where: {
+        lessonId,
+        sequence: { in: [1, 2, 3, 4, 5] },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const existingBySequence = new Map<
+      number,
+      (typeof existingDetailImages)[0]
+    >();
+    for (const image of existingDetailImages) {
+      if (!existingBySequence.has(image.sequence)) {
+        existingBySequence.set(image.sequence, image);
+      }
+    }
+
+    const detailKeys: Array<
+      'image2' | 'image3' | 'image4' | 'image5' | 'image6'
+    > = ['image2', 'image3', 'image4', 'image5', 'image6'];
+    const imageMutations: DetailImageMutation[] = [];
+
+    for (let i = 0; i < detailKeys.length; i += 1) {
+      const key = detailKeys[i];
+      const slot = i + 2;
+      const sequence = slot - 1;
+      const file = files[key]?.[0];
+      const existing = existingBySequence.get(sequence);
+
+      if (file) {
+        const imageUrl = await this.uploadService.uploadFile('lesson', file);
+        if (existing) {
+          imageMutations.push({
+            mode: 'update',
+            id: existing.id,
+            sequence,
+            image: imageUrl,
+          });
+        } else {
+          imageMutations.push({
+            mode: 'create',
+            sequence,
+            image: imageUrl,
+          });
+        }
+        continue;
+      }
+
+      if (removeSequenceSet.has(slot) && existing) {
+        imageMutations.push({
+          mode: 'delete',
+          id: existing.id,
+          sequence,
+        });
+      }
     }
 
     const nextAddress = address ?? existingLesson.address;
@@ -519,18 +660,22 @@ export class LessonsService {
       : null;
 
     await this.prisma.$transaction(async (tx) => {
+      const lessonUpdateData: Prisma.LessonUncheckedUpdateInput = {
+        ...restDto,
+        ...(address !== undefined && { address }),
+        ...(durationMin !== undefined && { durationSec: durationMin * 60 }),
+        ...(coordinates && {
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+        }),
+        ...(nextRepresentativeImage !== undefined && {
+          representativeImage: nextRepresentativeImage,
+        }),
+      };
+
       await tx.lesson.update({
         where: { id: lessonId },
-        data: {
-          ...restDto,
-          ...(address !== undefined && { address }),
-          ...(durationMin !== undefined && { durationSec: durationMin * 60 }),
-          ...(coordinates && {
-            latitude: coordinates.latitude,
-            longitude: coordinates.longitude,
-          }),
-          ...(imageUrl && { representativeImage: imageUrl }),
-        },
+        data: lessonUpdateData,
       });
 
       if (nextSubCategoryIds !== undefined) {
@@ -544,6 +689,37 @@ export class LessonsService {
             subCategoryId,
           })),
         });
+      }
+
+      for (const mutation of imageMutations) {
+        if (mutation.mode === 'delete' && mutation.id !== undefined) {
+          await tx.lessonImage.delete({
+            where: { id: mutation.id },
+          });
+          continue;
+        }
+
+        if (
+          mutation.mode === 'update' &&
+          mutation.id !== undefined &&
+          mutation.image
+        ) {
+          await tx.lessonImage.update({
+            where: { id: mutation.id },
+            data: { image: mutation.image },
+          });
+          continue;
+        }
+
+        if (mutation.mode === 'create' && mutation.image) {
+          await tx.lessonImage.create({
+            data: {
+              lessonId,
+              sequence: mutation.sequence,
+              image: mutation.image,
+            },
+          });
+        }
       }
     });
     return;
