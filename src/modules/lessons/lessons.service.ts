@@ -810,8 +810,8 @@ export function toLessonScheduleCreateInput(
     lesson: {
       connect: { id: Number(lessonId) },
     },
-    startAt: parseSeoulDateTimeToUtc(dto.startAt),
-    endAt: parseSeoulDateTimeToUtc(dto.endAt),
+    startAt: new Date(dto.startAt),
+    endAt: new Date(dto.endAt),
     currentParticipants: 0,
   };
 }
@@ -820,8 +820,8 @@ export function toLessonScheduleUpdateInput(
   dto: UpdateScheduleDto,
 ): Prisma.LessonScheduleUpdateInput {
   return {
-    ...(dto.startAt && { startAt: parseSeoulDateTimeToUtc(dto.startAt) }),
-    ...(dto.endAt && { endAt: parseSeoulDateTimeToUtc(dto.endAt) }),
+    ...(dto.startAt && { startAt: new Date(dto.startAt) }),
+    ...(dto.endAt && { endAt: new Date(dto.endAt) }),
     ...(dto.status && { status: dto.status }),
   };
 }

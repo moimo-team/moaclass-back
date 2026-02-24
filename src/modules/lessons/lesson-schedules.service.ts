@@ -10,7 +10,7 @@ import { CreateScheduleDto } from './dto/schedule.dto';
 import { Prisma, ParticipationStatus } from '@prisma/client';
 import {
   formatScheduleWithSeoulTime,
-  parseSeoulDateTimeToUtc,
+
 } from './utils/schedule-time.util';
 
 @Injectable()
@@ -54,8 +54,8 @@ export class LessonSchedulesService {
       let endAt: Date;
 
       try {
-        startAt = parseSeoulDateTimeToUtc(dto.startAt);
-        endAt = parseSeoulDateTimeToUtc(dto.endAt);
+        startAt = new Date(dto.startAt);
+        endAt = new Date(dto.endAt);
       } catch {
         throw new BadRequestException(
           `${index + 1}번째 일정의 날짜 형식이 유효하지 않습니다.`,
