@@ -1,4 +1,4 @@
-import {
+﻿import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -282,8 +282,14 @@ describe('ReviewsService (integration, real DB)', () => {
     if (!review) return;
     reviewIds.push(review.id);
 
+    const updatedLesson = await prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      select: { rate: true },
+    });
+
     expect(review.representativeImage).toBeNull();
     expect(review.images).toHaveLength(0);
+    expect(updatedLesson?.rate).toBe(4.5);
     expect(pointsService.earnPoints).toHaveBeenCalledWith(
       reviewer.id,
       1000,
@@ -504,6 +510,7 @@ describe('ReviewsService (integration, real DB)', () => {
       reviewer.id,
       review.id,
       {
+        rating: 4.5,
         content: '수정 후 내용',
       },
       {},
@@ -521,7 +528,12 @@ describe('ReviewsService (integration, real DB)', () => {
     expect(updated).not.toBeNull();
     if (!updated) return;
 
-    expect(updated.rating).toBe(3.5);
+    const updatedLesson = await prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      select: { rate: true },
+    });
+
+    expect(updated.rating).toBe(4.5);
     expect(updated.content).toBe('수정 후 내용');
     expect(updated.representativeImage).toBe(
       'https://example.com/before-rep.png',
@@ -529,6 +541,7 @@ describe('ReviewsService (integration, real DB)', () => {
     expect(updated.images[0]?.image).toBe(
       'https://example.com/before-image2.png',
     );
+    expect(updatedLesson?.rate).toBe(4.5);
   });
 
   it('update: removeSequences로 기존 이미지를 삭제할 수 있다', async () => {

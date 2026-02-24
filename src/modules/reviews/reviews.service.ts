@@ -30,6 +30,8 @@ type ReviewUploadFiles = Partial<
   Record<ReviewImageFieldKey, Express.Multer.File[]>
 >;
 
+type ReviewTx = Prisma.TransactionClient;
+
 @Injectable()
 export class ReviewsService {
   constructor(
@@ -38,6 +40,18 @@ export class ReviewsService {
     private readonly couponsService: CouponsService,
     private readonly pointsService: PointsService,
   ) {}
+
+  private async refreshLessonRate(tx: ReviewTx, lessonId: number) {
+    const aggregate = await tx.review.aggregate({
+      where: { lessonId },
+      _avg: { rating: true },
+    });
+
+    await tx.lesson.update({
+      where: { id: lessonId },
+      data: { rate: aggregate._avg.rating ?? 0 },
+    });
+  }
 
   async create(userId: number, dto: CreateReviewDto, files: ReviewUploadFiles) {
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -156,6 +170,8 @@ export class ReviewsService {
             })),
           });
         }
+
+        await this.refreshLessonRate(tx, enrollment.schedule.lessonId);
       });
     } catch (error) {
       if (
@@ -356,6 +372,8 @@ export class ReviewsService {
             },
           });
         }
+
+        await this.refreshLessonRate(tx, review.lessonId);
       });
     } catch {
       throw new InternalServerErrorException(
