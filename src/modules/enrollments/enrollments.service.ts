@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
 import { MailsService } from '../mails/mails.service';
-import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+import { } from '../lessons/utils/schedule-time.util';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -153,10 +153,10 @@ export class EnrollmentsService {
         });
       }
 
-      // ✅ currentParticipants 증가
+      // ✅ currentParticipants 증가 (신청 인원만큼 증가)
       await tx.lessonSchedule.update({
         where: { id: dto.scheduleId },
-        data: { currentParticipants: { increment: 1 } },
+        data: { currentParticipants: { increment: quantity } },
       });
 
       // ✅ 선생님 포인트 적립
@@ -308,8 +308,8 @@ export class EnrollmentsService {
         lessonId: e.schedule.lessonId,
         image: e.schedule.lesson.representativeImage,
         title: e.schedule.lesson.title,
-        startAt: formatUtcDateToSeoulDateTime(e.schedule.startAt),
-        endAt: formatUtcDateToSeoulDateTime(e.schedule.endAt),
+        startAt: e.schedule.startAt,
+        endAt: e.schedule.endAt,
         status,
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
@@ -428,6 +428,12 @@ export class EnrollmentsService {
         data: { point: { decrement: refundAmount } },
       });
 
+      // ✅ currentParticipants 차감 (취소 인원만큼 차감)
+      await tx.lessonSchedule.update({
+        where: { id: enrollment.scheduleId },
+        data: { currentParticipants: { decrement: enrollment.quantity } },
+      });
+
       // ✅ 선생님 포인트 차감 트랜잭션 기록
       await tx.pointTransaction.create({
         data: {
@@ -489,8 +495,8 @@ export class EnrollmentsService {
         title: schedule.lesson.title,
         teacherName:
           schedule.lesson.teacher.teacherProfile?.nickname ?? '알 수 없음',
-        startAt: formatUtcDateToSeoulDateTime(schedule.startAt),
-        endAt: formatUtcDateToSeoulDateTime(schedule.endAt),
+        startAt: schedule.startAt,
+        endAt: schedule.endAt,
       },
       paymentInfo: {
         originPrice,

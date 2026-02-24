@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+
 import { PaymentDetailDto } from './dto/payments.dto';
 import { CouponsService } from '../coupons/coupons.service';
 
@@ -71,8 +71,8 @@ export class PaymentsService {
         representativeImage: schedule.lesson.representativeImage,
         title: schedule.lesson.title,
         schedule: {
-          startAt: formatUtcDateToSeoulDateTime(schedule.startAt),
-          endAt: formatUtcDateToSeoulDateTime(schedule.endAt),
+          startAt: (schedule.startAt),
+          endAt: (schedule.endAt),
         },
         address: schedule.lesson.address,
       },
@@ -169,13 +169,13 @@ export class PaymentsService {
     const detail: PaymentDetailDto = {
       orderId: useTx.id,
       transactionStatus: useTx.status,
-      paymentDate: formatUtcDateToSeoulDateTime(useTx.createdAt),
+      paymentDate: (useTx.createdAt),
       classInfo: {
         title: schedule.lesson.title,
         teacherName:
           schedule.lesson.teacher.teacherProfile?.nickname ?? '알 수 없음',
-        startAt: formatUtcDateToSeoulDateTime(schedule.startAt),
-        endAt: formatUtcDateToSeoulDateTime(schedule.endAt),
+        startAt: (schedule.startAt),
+        endAt: (schedule.endAt),
       },
       paymentInfo: {
         originPrice,
@@ -197,7 +197,7 @@ export class PaymentsService {
           deductedAmount: finalPrice - refundTx.amount,
           refundAmount: refundTx.amount,
           paidAmount: finalPrice,
-          refundDate: formatUtcDateToSeoulDateTime(refundTx.createdAt),
+          refundDate: (refundTx.createdAt),
           reason: refundTx.reason ?? '수강 취소 환불',
           detailReason: refundTx.detailReason ?? '',
         }
