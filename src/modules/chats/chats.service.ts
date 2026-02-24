@@ -177,12 +177,10 @@ export class ChatService {
         },
       },
     });
-    console.log(participants);
 
     return participants.map((p) => {
       const isTeacher = p.room.lesson && p.room.lesson.userId === userId;
       let displayTitle = p.room.meeting?.title || p.room.lesson?.title;
-      console.log(p.roomId, p.room.lesson?.userId, userId);
 
       if (isTeacher && p.room.student) {
         displayTitle = `${p.room.lesson?.title} | ${p.room.student.nickname}`;
