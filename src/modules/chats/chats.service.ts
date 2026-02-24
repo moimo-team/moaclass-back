@@ -166,6 +166,9 @@ export class ChatService {
           include: {
             meeting: true,
             lesson: true,
+            student: {
+              select: { nickname: true },
+            },
             messages: {
               orderBy: { createdAt: 'desc' },
               take: 1,
@@ -175,14 +178,24 @@ export class ChatService {
       },
     });
 
-    return participants.map((p) => ({
-      roomId: p.room.id,
-      meetingId: p.room.meetingId,
-      lessonId: p.room.lessonId,
-      title: p.room.meeting?.title || p.room.lesson?.title,
-      lastMessage: p.room.messages[0]?.content || null,
-      updatedAt: p.room.updatedAt,
-    }));
+    return participants.map((p) => {
+      const isTeacher = p.room.lesson && p.room.lesson.userId === userId;
+      let displayTitle = p.room.meeting?.title || p.room.lesson?.title;
+
+      if (isTeacher && p.room.student) {
+        displayTitle = `${p.room.lesson?.title} | ${p.room.student.nickname}`;
+      }
+
+      return {
+        roomId: p.room.id,
+        meetingId: p.room.meetingId,
+        lessonId: p.room.lessonId,
+        title: p.room.meeting?.title || p.room.lesson?.title,
+        lastMessage: p.room.messages[0]?.content || null,
+        updatedAt: p.room.updatedAt,
+        displayTitle,
+      };
+    });
   }
 
   async getRoomParticipants(roomId: number) {
