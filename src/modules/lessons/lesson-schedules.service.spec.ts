@@ -153,6 +153,7 @@ describe('LessonSchedulesService', () => {
       expect(result[0].startAt).toBe('2026-02-20T10:00:00');
       expect(result[0].endAt).toBe('2026-02-20T12:00:00');
       expect(result[0].maxParticipants).toBe(8);
+      expect(result[0].durationMin).toBe(90);
     });
   });
 });
