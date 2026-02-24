@@ -17,10 +17,6 @@ import {
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
 import { UploadService } from '../upload/upload.service';
-import {
-  formatScheduleWithSeoulTime,
-  parseSeoulDateTimeToUtc,
-} from './utils/schedule-time.util';
 import axios from 'axios';
 
 interface KakaoAddressDocument {
@@ -46,7 +42,7 @@ export class LessonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) { }
+  ) {}
 
   private async resolveCoordinatesFromAddress(address: string) {
     try {
@@ -213,12 +209,12 @@ export class LessonsService {
       ...(filters.userId && { userId: filters.userId }),
       ...(filters.regionId &&
         filters.regionId.length > 0 && {
-        regionId: { in: filters.regionId },
-      }),
+          regionId: { in: filters.regionId },
+        }),
       ...(filters.categoryId &&
         filters.categoryId.length > 0 && {
-        lessonCategoryId: { in: filters.categoryId },
-      }),
+          lessonCategoryId: { in: filters.categoryId },
+        }),
       ...(trimmedKeyword && {
         OR: [
           { title: { contains: trimmedKeyword, mode: 'insensitive' } },
@@ -239,10 +235,10 @@ export class LessonsService {
       }),
       ...(filters.subCategoryId &&
         filters.subCategoryId.length > 0 && {
-        subCategories: {
-          some: { subCategoryId: { in: filters.subCategoryId } },
-        },
-      }),
+          subCategories: {
+            some: { subCategoryId: { in: filters.subCategoryId } },
+          },
+        }),
       ...(filters.level &&
         filters.level.length > 0 && { level: { in: filters.level } }),
       ...(filters.minParticipants && {
@@ -255,10 +251,10 @@ export class LessonsService {
       ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
       ...(filters.isLiked &&
         userId && {
-        wishlists: {
-          some: { userId },
-        },
-      }),
+          wishlists: {
+            some: { userId },
+          },
+        }),
     };
 
     const orderBy: Prisma.LessonOrderByWithRelationInput = (() => {
@@ -284,7 +280,7 @@ export class LessonsService {
     })();
 
     const baseInclude = {
-      teacher: { select: { id: true, nickname: true } },
+      teacher: { select: { id: true, nickname: true, image: true } },
       lessonCategory: { select: { id: true, name: true } },
       region: { select: { id: true, name: true } },
       subCategories: {
@@ -366,6 +362,7 @@ export class LessonsService {
       const data = pagedLessons.map((lesson) => {
         const {
           durationSec,
+          teacher,
           lessonCategory,
           region,
           subCategories,
@@ -373,6 +370,11 @@ export class LessonsService {
         } = lesson;
         return {
           ...restLesson,
+          teacher: {
+            id: teacher.id,
+            nickname: teacher.nickname,
+            profileImage: teacher.image,
+          },
           isLiked: likedLessonIdSet.has(lesson.id),
           durationMin: Math.floor(durationSec / 60),
           lessonCategoryName: lessonCategory.name,
@@ -381,9 +383,7 @@ export class LessonsService {
             id: item.subCategory.id,
             name: item.subCategory.name,
           })),
-          schedules: lesson.schedules.map((schedule) =>
-            (schedule),
-          ),
+          schedules: lesson.schedules.map((schedule) => schedule),
           images: [
             { id: 0, image: lesson.representativeImage, sequence: 0 },
             ...(lesson.images || []),
@@ -416,6 +416,7 @@ export class LessonsService {
     const data = lessons.map((lesson) => {
       const {
         durationSec,
+        teacher,
         lessonCategory,
         region,
         subCategories,
@@ -423,6 +424,11 @@ export class LessonsService {
       } = lesson;
       return {
         ...restLesson,
+        teacher: {
+          id: teacher.id,
+          nickname: teacher.nickname,
+          profileImage: teacher.image,
+        },
         isLiked: likedLessonIdSet.has(lesson.id),
         durationMin: Math.floor(durationSec / 60),
         lessonCategoryName: lessonCategory.name,
@@ -431,9 +437,7 @@ export class LessonsService {
           id: item.subCategory.id,
           name: item.subCategory.name,
         })),
-        schedules: lesson.schedules.map((schedule) =>
-          (schedule),
-        ),
+        schedules: lesson.schedules.map((schedule) => schedule),
         images: [
           { id: 0, image: lesson.representativeImage, sequence: 0 },
           ...(lesson.images || []),
@@ -516,9 +520,7 @@ export class LessonsService {
         id: item.subCategory.id,
         name: item.subCategory.name,
       })),
-      schedules: lesson.schedules.map((schedule) =>
-        (schedule),
-      ),
+      schedules: lesson.schedules.map((schedule) => schedule),
       images: [
         { id: 0, image: lesson.representativeImage, sequence: 0 },
         ...(lesson.images || []),
