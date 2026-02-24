@@ -64,6 +64,7 @@ describe('LessonSchedulesService', () => {
       prismaMock.lessonSchedule.findFirst.mockResolvedValue({ id: 5 });
       prismaMock.enrollment.findMany.mockResolvedValue([
         {
+          quantity: 2,
           user: {
             id: 21,
             nickname: 'studentA',
@@ -95,6 +96,7 @@ describe('LessonSchedulesService', () => {
           userId: 21,
           nickname: 'studentA',
           profileImage: 'https://cdn.example.com/users/21.jpg',
+          quantity: 2,
         },
       ]);
     });

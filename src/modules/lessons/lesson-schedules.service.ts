@@ -15,7 +15,7 @@ import {
 
 @Injectable()
 export class LessonSchedulesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private async checkOwnership(userId: number, lessonId: number) {
     const lesson = await this.prisma.lesson.findUnique({
@@ -221,6 +221,7 @@ export class LessonSchedulesService {
       userId: e.user.id,
       nickname: e.user.nickname,
       profileImage: e.user.image,
+      quantity: e.quantity,
     }));
   }
 }
