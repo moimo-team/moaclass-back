@@ -6,6 +6,8 @@ import { LessonReviewsController } from './lesson-reviews.controller';
 import { ReviewsService } from './reviews.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
+import { CouponsService } from '../coupons/coupons.service';
+import { PointsService } from '../points/points.service';
 
 describe('LessonReviewsController (integration, real DB)', () => {
   let app: INestApplication<App>;
@@ -16,6 +18,8 @@ describe('LessonReviewsController (integration, real DB)', () => {
   const regionIds: number[] = [];
   const lessonCategoryIds: number[] = [];
   const lessonIds: number[] = [];
+  const scheduleIds: number[] = [];
+  const enrollmentIds: number[] = [];
   const reviewIds: number[] = [];
 
   beforeAll(async () => {
@@ -36,6 +40,18 @@ describe('LessonReviewsController (integration, real DB)', () => {
             uploadFile: jest.fn(),
           },
         },
+        {
+          provide: CouponsService,
+          useValue: {
+            issueReviewRewardCoupon: jest.fn(),
+          },
+        },
+        {
+          provide: PointsService,
+          useValue: {
+            earnPoints: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -54,6 +70,20 @@ describe('LessonReviewsController (integration, real DB)', () => {
         where: { id: { in: reviewIds } },
       });
       reviewIds.length = 0;
+    }
+
+    if (enrollmentIds.length > 0) {
+      await prisma.enrollment.deleteMany({
+        where: { id: { in: enrollmentIds } },
+      });
+      enrollmentIds.length = 0;
+    }
+
+    if (scheduleIds.length > 0) {
+      await prisma.lessonSchedule.deleteMany({
+        where: { id: { in: scheduleIds } },
+      });
+      scheduleIds.length = 0;
     }
 
     if (lessonIds.length > 0) {
@@ -86,7 +116,9 @@ describe('LessonReviewsController (integration, real DB)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   async function createLessonOwnerAndLesson(suffix: string) {
@@ -138,9 +170,32 @@ describe('LessonReviewsController (integration, real DB)', () => {
     const { user, lesson } = await createLessonOwnerAndLesson('1');
 
     for (let i = 1; i <= 7; i += 1) {
+      const schedule = await prisma.lessonSchedule.create({
+        data: {
+          lessonId: lesson.id,
+          startAt: new Date(Date.now() + (24 + i) * 60 * 60 * 1000),
+          endAt: new Date(Date.now() + (25 + i) * 60 * 60 * 1000),
+        },
+      });
+      scheduleIds.push(schedule.id);
+
+      const enrollment = await prisma.enrollment.create({
+        data: {
+          userId: user.id,
+          scheduleId: schedule.id,
+          status: 'ACCEPTED',
+          originPrice: 30000,
+          discountAmount: 0,
+          finalPrice: 30000,
+          quantity: 1,
+        },
+      });
+      enrollmentIds.push(enrollment.id);
+
       const review = await prisma.review.create({
         data: {
           userId: user.id,
+          enrollmentId: enrollment.id,
           lessonId: lesson.id,
           rating: 4.0 + i * 0.1,
           content: `리뷰 ${i}`,
@@ -156,11 +211,27 @@ describe('LessonReviewsController (integration, real DB)', () => {
       .expect(200);
 
     const body = JSON.parse(response.text) as {
-      data: Array<{ content: string }>;
+      data: Array<{
+        id: number;
+        lessonId: number;
+        lessonTitle: string;
+        userId: number;
+        rating: number;
+        content: string;
+        image1: string | null;
+        image2: string | null;
+        image3: string | null;
+        image4: string | null;
+        image5: string | null;
+        image6: string | null;
+        image7: string | null;
+        image8: string | null;
+      }>;
       meta: {
         totalCount: number;
         page: number;
         limit: number;
+        totalPages: number;
       };
     };
 
