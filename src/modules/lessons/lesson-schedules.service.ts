@@ -184,7 +184,7 @@ export class LessonSchedulesService {
     });
 
     return schedules.map((s) => ({
-      ...formatScheduleWithSeoulTime(s),
+      ...s,
       maxParticipants: lesson.maxParticipants,
       durationMin: Math.floor(lesson.durationSec / 60),
     }));
