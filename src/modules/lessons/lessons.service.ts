@@ -382,7 +382,7 @@ export class LessonsService {
             name: item.subCategory.name,
           })),
           schedules: lesson.schedules.map((schedule) =>
-            formatScheduleWithSeoulTime(schedule),
+            (schedule),
           ),
           images: [
             { id: 0, image: lesson.representativeImage, sequence: 0 },
@@ -432,7 +432,7 @@ export class LessonsService {
           name: item.subCategory.name,
         })),
         schedules: lesson.schedules.map((schedule) =>
-          formatScheduleWithSeoulTime(schedule),
+          (schedule),
         ),
         images: [
           { id: 0, image: lesson.representativeImage, sequence: 0 },
@@ -517,7 +517,7 @@ export class LessonsService {
         name: item.subCategory.name,
       })),
       schedules: lesson.schedules.map((schedule) =>
-        formatScheduleWithSeoulTime(schedule),
+        (schedule),
       ),
       images: [
         { id: 0, image: lesson.representativeImage, sequence: 0 },
