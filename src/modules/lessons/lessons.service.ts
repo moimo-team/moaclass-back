@@ -42,7 +42,7 @@ export class LessonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) {}
+  ) { }
 
   private async resolveCoordinatesFromAddress(address: string) {
     try {
@@ -209,12 +209,12 @@ export class LessonsService {
       ...(filters.userId && { userId: filters.userId }),
       ...(filters.regionId &&
         filters.regionId.length > 0 && {
-          regionId: { in: filters.regionId },
-        }),
+        regionId: { in: filters.regionId },
+      }),
       ...(filters.categoryId &&
         filters.categoryId.length > 0 && {
-          lessonCategoryId: { in: filters.categoryId },
-        }),
+        lessonCategoryId: { in: filters.categoryId },
+      }),
       ...(trimmedKeyword && {
         OR: [
           { title: { contains: trimmedKeyword, mode: 'insensitive' } },
@@ -235,10 +235,10 @@ export class LessonsService {
       }),
       ...(filters.subCategoryId &&
         filters.subCategoryId.length > 0 && {
-          subCategories: {
-            some: { subCategoryId: { in: filters.subCategoryId } },
-          },
-        }),
+        subCategories: {
+          some: { subCategoryId: { in: filters.subCategoryId } },
+        },
+      }),
       ...(filters.level &&
         filters.level.length > 0 && { level: { in: filters.level } }),
       ...(filters.minParticipants && {
@@ -251,10 +251,10 @@ export class LessonsService {
       ...(filters.maxPrice && { price: { lte: filters.maxPrice } }),
       ...(filters.isLiked &&
         userId && {
-          wishlists: {
-            some: { userId },
-          },
-        }),
+        wishlists: {
+          some: { userId },
+        },
+      }),
     };
 
     const orderBy: Prisma.LessonOrderByWithRelationInput = (() => {
@@ -280,7 +280,14 @@ export class LessonsService {
     })();
 
     const baseInclude = {
-      teacher: { select: { id: true, nickname: true, image: true } },
+      teacher: {
+        select: {
+          id: true,
+          nickname: true,
+          image: true,
+          teacherProfile: { select: { nickname: true, image: true } },
+        },
+      },
       lessonCategory: { select: { id: true, name: true } },
       region: { select: { id: true, name: true } },
       subCategories: {
@@ -372,8 +379,8 @@ export class LessonsService {
           ...restLesson,
           teacher: {
             id: teacher.id,
-            nickname: teacher.nickname,
-            profileImage: teacher.image,
+            nickname: teacher.teacherProfile?.nickname ?? teacher.nickname,
+            profileImage: teacher.teacherProfile?.image ?? teacher.image,
           },
           isLiked: likedLessonIdSet.has(lesson.id),
           durationMin: Math.floor(durationSec / 60),
@@ -426,8 +433,8 @@ export class LessonsService {
         ...restLesson,
         teacher: {
           id: teacher.id,
-          nickname: teacher.nickname,
-          profileImage: teacher.image,
+          nickname: teacher.teacherProfile?.nickname ?? teacher.nickname,
+          profileImage: teacher.teacherProfile?.image ?? teacher.image,
         },
         isLiked: likedLessonIdSet.has(lesson.id),
         durationMin: Math.floor(durationSec / 60),
@@ -455,7 +462,14 @@ export class LessonsService {
         status: { not: 'DELETED' },
       },
       include: {
-        teacher: { select: { id: true, nickname: true, image: true } },
+        teacher: {
+          select: {
+            id: true,
+            nickname: true,
+            image: true,
+            teacherProfile: { select: { nickname: true, image: true } },
+          },
+        },
         lessonCategory: { select: { id: true, name: true } },
         region: { select: { id: true, name: true } },
         subCategories: {
@@ -512,6 +526,13 @@ export class LessonsService {
     } = lesson;
     return {
       ...restLesson,
+      teacher: {
+        id: lesson.teacher.id,
+        nickname:
+          lesson.teacher.teacherProfile?.nickname ?? lesson.teacher.nickname,
+        profileImage:
+          lesson.teacher.teacherProfile?.image ?? lesson.teacher.image,
+      },
       isLiked: likedLessonIdSet.has(lesson.id),
       durationMin: Math.floor(durationSec / 60),
       lessonCategoryName: lessonCategory.name,

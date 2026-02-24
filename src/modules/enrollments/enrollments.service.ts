@@ -153,10 +153,10 @@ export class EnrollmentsService {
         });
       }
 
-      // ✅ currentParticipants 증가
+      // ✅ currentParticipants 증가 (신청 인원만큼 증가)
       await tx.lessonSchedule.update({
         where: { id: dto.scheduleId },
-        data: { currentParticipants: { increment: 1 } },
+        data: { currentParticipants: { increment: quantity } },
       });
 
       // ✅ 선생님 포인트 적립
@@ -426,6 +426,12 @@ export class EnrollmentsService {
       await tx.user.update({
         where: { id: teacherId },
         data: { point: { decrement: refundAmount } },
+      });
+
+      // ✅ currentParticipants 차감 (취소 인원만큼 차감)
+      await tx.lessonSchedule.update({
+        where: { id: enrollment.scheduleId },
+        data: { currentParticipants: { decrement: enrollment.quantity } },
       });
 
       // ✅ 선생님 포인트 차감 트랜잭션 기록
