@@ -413,6 +413,12 @@ export class ReviewsService {
           take: limit,
           orderBy: { createdAt: 'desc' },
           include: {
+            user: {
+              select: {
+                nickname: true,
+                image: true,
+              },
+            },
             images: {
               orderBy: { sequence: 'asc' },
               select: {
@@ -448,6 +454,8 @@ export class ReviewsService {
           lessonId: review.lessonId,
           lessonTitle: lesson.title,
           userId: review.userId,
+          nickname: review.user.nickname,
+          profileImage: review.user.image,
           rating: review.rating,
           content: review.content,
           ...imageMap,
