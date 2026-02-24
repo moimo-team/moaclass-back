@@ -3,25 +3,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { PointType, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TransactionStatus, PointType } from '@prisma/client';
 import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+
 @Injectable()
 export class PointsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getMyPoints(userId: number) {
-    // 유저 포인트 잔액 조회
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { point: true },
     });
 
     if (!user) {
-      throw new NotFoundException('존재하지 않는 유저입니다.');
+      throw new NotFoundException('존재하지 않는 사용자입니다.');
     }
 
-    // 포인트 내역 조회 (enrollment -> schedule -> lesson, coupon)
     const transactions = await this.prisma.pointTransaction.findMany({
       where: { userId },
       include: {
@@ -32,16 +31,16 @@ export class PointsService {
     });
 
     const history = transactions.map((t) => {
-      // ✅ 타입별 금액 처리
       let signedAmount = t.amount;
       switch (t.type) {
-        case PointType.USE: // 학생 결제 → 음수
-        case PointType.DEDUCT: // 선생님 차감 → 음수
+        case PointType.USE:
+        case PointType.DEDUCT:
           signedAmount = -t.amount;
           break;
-        case PointType.CHARGE: // 학생 충전 → 양수
-        case PointType.REFUND: // 학생 환불 → 양수
-        case PointType.EARN: // 선생님 적립 → 양수
+        case PointType.CHARGE:
+        case PointType.REFUND:
+        case PointType.EARN:
+        case PointType.EVENT:
           signedAmount = t.amount;
           break;
       }
@@ -54,16 +53,15 @@ export class PointsService {
         amount: signedAmount,
         coupon: t.coupon
           ? {
-            code: t.coupon.code,
-            discountType: t.coupon.discountType,
-            discountValue: t.coupon.discountValue,
-          }
+              code: t.coupon.code,
+              discountType: t.coupon.discountType,
+              discountValue: t.coupon.discountValue,
+            }
           : null,
         createdAt: formatUtcDateToSeoulDateTime(t.createdAt),
       };
     });
 
-    // teacherProfit: teacher net earnings = sum(EARN) - sum(DEDUCT)
     const earnAgg = await this.prisma.pointTransaction.aggregate({
       where: { userId, type: PointType.EARN },
       _sum: { amount: true },
@@ -89,13 +87,11 @@ export class PointsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 유저 포인트 증가
       const updatedUser = await tx.user.update({
         where: { id: userId },
         data: { point: { increment: amount } },
       });
 
-      // 포인트 트랜잭션 기록
       const transaction = await tx.pointTransaction.create({
         data: {
           userId,
@@ -118,8 +114,11 @@ export class PointsService {
     });
   }
 
-  // ✅ NEW: 포인트 적립 (리뷰 보상 등)
-  async earnPoints(userId: number, amount: number, type: PointType = PointType.EARN) {
+  async earnPoints(
+    userId: number,
+    amount: number,
+    type: PointType = PointType.EARN,
+  ) {
     if (amount <= 0) return;
 
     return this.prisma.$transaction(async (tx) => {

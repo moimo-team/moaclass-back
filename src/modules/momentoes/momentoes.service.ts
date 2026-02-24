@@ -16,7 +16,7 @@ export class MomentoesService {
   constructor(
     private prisma: PrismaService,
     private readonly uploadService: UploadService,
-  ) { }
+  ) {}
 
   async create(
     dto: CreateMomentoDto,
@@ -120,6 +120,17 @@ export class MomentoesService {
       throw new NotFoundException('삭제할 모멘토 프로필이 존재하지 않습니다.');
     }
 
+    const lessonCount = await this.prisma.lesson.count({
+      where: {
+        userId,
+        status: { not: 'DELETED' },
+      },
+    });
+
+    if (lessonCount > 0) {
+      throw new ConflictException('클래스를 가지고 있습니다.');
+    }
+
     try {
       await this.prisma.teacherProfile.delete({
         where: { userId },
@@ -130,7 +141,7 @@ export class MomentoesService {
         error.code === 'P2025'
       ) {
         throw new NotFoundException(
-          '이미 삭제되었거나 존재하지 않는 프로필입니다.',
+          '이미 삭제했거나 존재하지 않는 프로필입니다.',
         );
       }
       throw new InternalServerErrorException(
@@ -138,7 +149,6 @@ export class MomentoesService {
       );
     }
   }
-
   async findByUserId(userId: number) {
     return this.findTeacherProfileView(userId);
   }

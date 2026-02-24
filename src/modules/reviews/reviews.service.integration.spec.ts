@@ -3,8 +3,11 @@
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { PointType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ReviewsService } from './reviews.service';
+
+jest.setTimeout(120000);
 
 describe('ReviewsService (integration, real DB)', () => {
   let prisma: PrismaService;
@@ -19,7 +22,7 @@ describe('ReviewsService (integration, real DB)', () => {
   };
 
   const pointsService = {
-    earnPoints: jest.fn<Promise<void>, [number, number]>(),
+    earnPoints: jest.fn<Promise<void>, [number, number, PointType?]>(),
   };
 
   let uniqueSeq = 0;
@@ -279,9 +282,19 @@ describe('ReviewsService (integration, real DB)', () => {
     if (!review) return;
     reviewIds.push(review.id);
 
+    const updatedLesson = await prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      select: { rate: true },
+    });
+
     expect(review.representativeImage).toBeNull();
     expect(review.images).toHaveLength(0);
-    expect(pointsService.earnPoints).toHaveBeenCalledWith(reviewer.id, 100);
+    expect(updatedLesson?.rate).toBe(4.5);
+    expect(pointsService.earnPoints).toHaveBeenCalledWith(
+      reviewer.id,
+      1000,
+      PointType.EVENT,
+    );
     expect(couponsService.issueReviewRewardCoupon).not.toHaveBeenCalled();
   });
 
@@ -345,7 +358,11 @@ describe('ReviewsService (integration, real DB)', () => {
     expect(couponsService.issueReviewRewardCoupon).toHaveBeenCalledWith(
       reviewer.id,
     );
-    expect(pointsService.earnPoints).not.toHaveBeenCalled();
+    expect(pointsService.earnPoints).toHaveBeenCalledWith(
+      reviewer.id,
+      1000,
+      PointType.EVENT,
+    );
   });
 
   it('create: 내 결제(enrollment)가 아니면 ForbiddenException을 던진다', async () => {
@@ -493,6 +510,7 @@ describe('ReviewsService (integration, real DB)', () => {
       reviewer.id,
       review.id,
       {
+        rating: 4.5,
         content: '수정 후 내용',
       },
       {},
@@ -510,13 +528,80 @@ describe('ReviewsService (integration, real DB)', () => {
     expect(updated).not.toBeNull();
     if (!updated) return;
 
-    expect(updated.rating).toBe(3.5);
+    const updatedLesson = await prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      select: { rate: true },
+    });
+
+    expect(updated.rating).toBe(4.5);
     expect(updated.content).toBe('수정 후 내용');
     expect(updated.representativeImage).toBe(
       'https://example.com/before-rep.png',
     );
     expect(updated.images[0]?.image).toBe(
       'https://example.com/before-image2.png',
+    );
+    expect(updatedLesson?.rate).toBe(4.5);
+  });
+
+  it('update: removeSequences로 기존 이미지를 삭제할 수 있다', async () => {
+    const { lesson } = await createTeacherAndLesson('update_remove_images');
+    const reviewer = await createReviewer('update_remove_images');
+    const { enrollment } = await createEnrollment(reviewer.id, lesson.id);
+
+    const review = await prisma.review.create({
+      data: {
+        userId: reviewer.id,
+        enrollmentId: enrollment.id,
+        lessonId: lesson.id,
+        rating: 4,
+        content: '이미지 삭제 테스트',
+        representativeImage: 'https://example.com/remove-rep.png',
+      },
+    });
+    reviewIds.push(review.id);
+
+    await prisma.reviewImage.createMany({
+      data: [
+        {
+          reviewId: review.id,
+          sequence: 1,
+          image: 'https://example.com/remove-image2.png',
+        },
+        {
+          reviewId: review.id,
+          sequence: 2,
+          image: 'https://example.com/keep-image3.png',
+        },
+      ],
+    });
+
+    await service.update(
+      reviewer.id,
+      review.id,
+      {
+        removeSequences: [1, 2],
+      },
+      {},
+    );
+
+    const updated = await prisma.review.findUnique({
+      where: { id: review.id },
+      include: {
+        images: {
+          orderBy: { sequence: 'asc' },
+        },
+      },
+    });
+
+    expect(updated).not.toBeNull();
+    if (!updated) return;
+
+    expect(updated.representativeImage).toBeNull();
+    expect(updated.images).toHaveLength(1);
+    expect(updated.images[0]?.sequence).toBe(2);
+    expect(updated.images[0]?.image).toBe(
+      'https://example.com/keep-image3.png',
     );
   });
 

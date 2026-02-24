@@ -1,9 +1,12 @@
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonsService } from './lessons.service';
 
+jest.setTimeout(120000);
+
 describe('LessonsService (integration, real DB)', () => {
   let prisma: PrismaService;
   let service: LessonsService;
+  let runKey: string;
 
   const uploadService = {
     uploadFile: jest.fn<Promise<string>, [string, Express.Multer.File]>(),
@@ -21,6 +24,7 @@ describe('LessonsService (integration, real DB)', () => {
     if (!process.env.DATABASE_URL) {
       throw new Error('DATABASE_URL is required to run integration tests.');
     }
+    runKey = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
     prisma = new PrismaService();
     await prisma.$connect();
@@ -29,6 +33,8 @@ describe('LessonsService (integration, real DB)', () => {
   });
 
   afterEach(async () => {
+    uploadService.uploadFile.mockReset();
+
     if (wishlistRows.length > 0) {
       await prisma.wishlist.deleteMany({
         where: {
@@ -49,10 +55,36 @@ describe('LessonsService (integration, real DB)', () => {
     }
 
     if (lessonIds.length > 0) {
+      await prisma.lessonSubCategoryMap.deleteMany({
+        where: { lessonId: { in: lessonIds } },
+      });
+      await prisma.lessonImage.deleteMany({
+        where: { lessonId: { in: lessonIds } },
+      });
       await prisma.lesson.deleteMany({
         where: { id: { in: lessonIds } },
       });
       lessonIds.length = 0;
+    }
+
+    if (lessonCategoryIds.length > 0) {
+      const danglingLessons = await prisma.lesson.findMany({
+        where: { lessonCategoryId: { in: lessonCategoryIds } },
+        select: { id: true },
+      });
+
+      if (danglingLessons.length > 0) {
+        const danglingLessonIds = danglingLessons.map((lesson) => lesson.id);
+        await prisma.lessonSubCategoryMap.deleteMany({
+          where: { lessonId: { in: danglingLessonIds } },
+        });
+        await prisma.lessonImage.deleteMany({
+          where: { lessonId: { in: danglingLessonIds } },
+        });
+        await prisma.lesson.deleteMany({
+          where: { id: { in: danglingLessonIds } },
+        });
+      }
     }
 
     if (lessonCategoryIds.length > 0) {
@@ -86,7 +118,7 @@ describe('LessonsService (integration, real DB)', () => {
     categoryName?: string;
   }) {
     uniqueSeq += 1;
-    const token = uniqueSeq.toString().padStart(6, '0');
+    const token = `${runKey}_${uniqueSeq}`.slice(-18);
 
     const regionRows = await prisma.$queryRawUnsafe<Array<{ id: number }>>(
       `
@@ -131,7 +163,9 @@ describe('LessonsService (integration, real DB)', () => {
 
   async function createUser(prefix: string) {
     uniqueSeq += 1;
-    const token = `${prefix}_${uniqueSeq}`.replace(/[^a-zA-Z0-9_]/g, '');
+    const token = `${prefix}_${runKey}_${uniqueSeq}`
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .slice(0, 45);
 
     const user = await prisma.user.create({
       data: {
@@ -207,6 +241,171 @@ describe('LessonsService (integration, real DB)', () => {
     wishlistRows.push({ userId, lessonId });
   }
 
+  it('createLesson: saves lesson_images when image1~image6 files are provided', async () => {
+    const { regionId, lessonCategoryId, token } =
+      await createRegionAndCategory();
+    const teacher = await createUser('teacher_create_multi_images');
+    const resolveSpy = jest
+      .spyOn(service as any, 'resolveCoordinatesFromAddress')
+      .mockResolvedValueOnce({
+        latitude: 37.55,
+        longitude: 126.91,
+      });
+
+    const subCategory = await prisma.lessonSubCategory.create({
+      data: {
+        categoryId: lessonCategoryId,
+        name: `sub_${token}`,
+      },
+    });
+
+    uploadService.uploadFile
+      .mockResolvedValueOnce('https://example.com/rep.png')
+      .mockResolvedValueOnce('https://example.com/detail-1.png')
+      .mockResolvedValueOnce('https://example.com/detail-2.png')
+      .mockResolvedValueOnce('https://example.com/detail-4.png')
+      .mockResolvedValueOnce('https://example.com/detail-5.png');
+
+    const makeFile = (name: string) =>
+      ({
+        originalname: name,
+        mimetype: 'image/png',
+        buffer: Buffer.from('test'),
+      }) as Express.Multer.File;
+
+    await service.createLesson(
+      teacher.id,
+      {
+        lessonCategoryId,
+        title: `create_multi_${token}`,
+        description: 'multi image create test',
+        level: 'BEGINNER',
+        durationMin: 90,
+        curriculum: 'test curriculum',
+        subCategoryIds: [subCategory.id],
+        maxParticipants: 10,
+        regionId,
+        address: 'Seoul Mapo',
+        detailAddress: '3F 301',
+        directionsText: 'near station',
+      },
+      {
+        image1: [makeFile('rep.png')],
+        image2: [makeFile('detail1.png')],
+        image3: [makeFile('detail2.png')],
+        image5: [makeFile('detail4.png')],
+        image6: [makeFile('detail5.png')],
+      },
+    );
+
+    const created = await prisma.lesson.findFirst({
+      where: { userId: teacher.id, title: `create_multi_${token}` },
+      include: {
+        images: {
+          orderBy: { sequence: 'asc' },
+        },
+      },
+    });
+
+    expect(created).not.toBeNull();
+    if (!created) return;
+
+    lessonIds.push(created.id);
+
+    expect(created.representativeImage).toBe('https://example.com/rep.png');
+    expect(created.images).toHaveLength(4);
+    expect(created.images[0]?.sequence).toBe(1);
+    expect(created.images[0]?.image).toBe('https://example.com/detail-1.png');
+    expect(created.images[1]?.sequence).toBe(2);
+    expect(created.images[1]?.image).toBe('https://example.com/detail-2.png');
+    expect(created.images[2]?.sequence).toBe(3);
+    expect(created.images[2]?.image).toBe('https://example.com/detail-4.png');
+    expect(created.images[3]?.sequence).toBe(4);
+    expect(created.images[3]?.image).toBe('https://example.com/detail-5.png');
+
+    resolveSpy.mockRestore();
+  });
+  it('updateLesson: image1~image6 and removeSequences are applied with file priority', async () => {
+    const { regionId, lessonCategoryId } = await createRegionAndCategory();
+    const teacher = await createUser('teacher_update_images');
+
+    const lesson = await createLesson({
+      teacherUserId: teacher.id,
+      lessonCategoryId,
+      regionId,
+      suffix: 'update_images',
+    });
+
+    await prisma.lessonImage.createMany({
+      data: [
+        {
+          lessonId: lesson.id,
+          sequence: 1,
+          image: 'https://example.com/before-image2.png',
+        },
+        {
+          lessonId: lesson.id,
+          sequence: 2,
+          image: 'https://example.com/before-image3.png',
+        },
+        {
+          lessonId: lesson.id,
+          sequence: 5,
+          image: 'https://example.com/before-image6.png',
+        },
+      ],
+    });
+
+    uploadService.uploadFile
+      .mockResolvedValueOnce('https://example.com/after-rep.png')
+      .mockResolvedValueOnce('https://example.com/after-image2.png')
+      .mockResolvedValueOnce('https://example.com/after-image6.png');
+
+    const makeFile = (name: string) =>
+      ({
+        originalname: name,
+        mimetype: 'image/png',
+        buffer: Buffer.from('test'),
+      }) as Express.Multer.File;
+
+    await service.updateLesson(
+      teacher.id,
+      lesson.id,
+      {
+        removeSequences: [1, 3, 6],
+      },
+      {
+        image1: [makeFile('rep.png')],
+        image2: [makeFile('detail2.png')],
+        image6: [makeFile('detail6.png')],
+      },
+    );
+
+    const updated = await prisma.lesson.findUnique({
+      where: { id: lesson.id },
+      include: {
+        images: {
+          orderBy: { sequence: 'asc' },
+        },
+      },
+    });
+
+    expect(updated).not.toBeNull();
+    if (!updated) return;
+
+    expect(updated.representativeImage).toBe(
+      'https://example.com/after-rep.png',
+    );
+    expect(updated.images).toHaveLength(2);
+    expect(updated.images[0]?.sequence).toBe(1);
+    expect(updated.images[0]?.image).toBe(
+      'https://example.com/after-image2.png',
+    );
+    expect(updated.images[1]?.sequence).toBe(5);
+    expect(updated.images[1]?.image).toBe(
+      'https://example.com/after-image6.png',
+    );
+  });
   it('getLessons: 비로그인(userId 없음)이면 isLiked는 false다', async () => {
     const { regionId, lessonCategoryId } = await createRegionAndCategory();
     const teacher = await createUser('teacher_no_user');

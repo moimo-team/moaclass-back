@@ -74,6 +74,7 @@ enum PointType {
   USE       // 학생 포인트 사용 (결제)
   REFUND    // 학생 포인트 환불 (복원)
   EARN      // 선생님 포인트 적립
+  EVENT     // 이벤트/리뷰 보상 적립
   DEDUCT    // 선생님 포인트 차감
 }
 

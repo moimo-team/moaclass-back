@@ -1,11 +1,11 @@
-﻿import {
+import {
   ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PointType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -30,6 +30,8 @@ type ReviewUploadFiles = Partial<
   Record<ReviewImageFieldKey, Express.Multer.File[]>
 >;
 
+type ReviewTx = Prisma.TransactionClient;
+
 @Injectable()
 export class ReviewsService {
   constructor(
@@ -38,6 +40,18 @@ export class ReviewsService {
     private readonly couponsService: CouponsService,
     private readonly pointsService: PointsService,
   ) {}
+
+  private async refreshLessonRate(tx: ReviewTx, lessonId: number) {
+    const aggregate = await tx.review.aggregate({
+      where: { lessonId },
+      _avg: { rating: true },
+    });
+
+    await tx.lesson.update({
+      where: { id: lessonId },
+      data: { rate: aggregate._avg.rating ?? 0 },
+    });
+  }
 
   async create(userId: number, dto: CreateReviewDto, files: ReviewUploadFiles) {
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -156,6 +170,8 @@ export class ReviewsService {
             })),
           });
         }
+
+        await this.refreshLessonRate(tx, enrollment.schedule.lessonId);
       });
     } catch (error) {
       if (
@@ -171,14 +187,17 @@ export class ReviewsService {
     }
 
     // ✅ 보상 지급 로직 (별도 예외 처리 및 비동기 실행)
+    // 포인트는 리뷰 작성 시 항상 지급하고, 이미지 리뷰는 쿠폰을 추가 지급한다.
+    this.pointsService
+      .earnPoints(userId, 1000, PointType.EVENT)
+      .catch((err) => {
+        console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
+      });
+
     const hasImage = !!representativeImage || reviewImages.length > 0;
     if (hasImage) {
       this.couponsService.issueReviewRewardCoupon(userId).catch((err) => {
         console.error(`리뷰 보상 쿠폰 발급 실패 (userId: ${userId}):`, err);
-      });
-    } else {
-      this.pointsService.earnPoints(userId, 1000).catch((err) => {
-        console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
       });
     }
   }
@@ -255,6 +274,7 @@ export class ReviewsService {
       'image7',
       'image8',
     ];
+    const removeSequenceSet = new Set(dto.removeSequences ?? []);
 
     let nextRepresentativeImage = review.representativeImage;
     const representativeFile = files.image1?.[0];
@@ -263,10 +283,12 @@ export class ReviewsService {
         'review',
         representativeFile,
       );
+    } else if (removeSequenceSet.has(1)) {
+      nextRepresentativeImage = null;
     }
 
     type DetailImageMutation = {
-      mode: 'create' | 'update';
+      mode: 'create' | 'update' | 'delete';
       id?: number;
       sequence: number;
       image: string;
@@ -277,13 +299,25 @@ export class ReviewsService {
     for (let i = 1; i < orderedKeys.length; i += 1) {
       const key = orderedKeys[i];
       const file = files[key]?.[0];
-      if (!file) continue;
-
-      const imageUrl = await this.uploadService.uploadFile('review', file);
       const sequence = i; // image2 -> 1 ... image8 -> 7
       const existing = review.images.find(
         (image) => image.sequence === sequence,
       );
+      const shouldRemove = removeSequenceSet.has(i + 1);
+
+      if (!file) {
+        if (shouldRemove && existing) {
+          imageMutations.push({
+            mode: 'delete',
+            id: existing.id,
+            sequence,
+            image: existing.image,
+          });
+        }
+        continue;
+      }
+
+      const imageUrl = await this.uploadService.uploadFile('review', file);
 
       if (existing) {
         imageMutations.push({
@@ -313,6 +347,13 @@ export class ReviewsService {
         });
 
         for (const mutation of imageMutations) {
+          if (mutation.mode === 'delete' && mutation.id !== undefined) {
+            await tx.reviewImage.delete({
+              where: { id: mutation.id },
+            });
+            continue;
+          }
+
           if (mutation.mode === 'update' && mutation.id !== undefined) {
             await tx.reviewImage.update({
               where: { id: mutation.id },
@@ -331,6 +372,8 @@ export class ReviewsService {
             },
           });
         }
+
+        await this.refreshLessonRate(tx, review.lessonId);
       });
     } catch {
       throw new InternalServerErrorException(
