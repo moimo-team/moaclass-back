@@ -192,8 +192,9 @@ export class ChatService {
         lessonId: p.room.lessonId,
         title: p.room.meeting?.title || p.room.lesson?.title,
         lastMessage: p.room.messages[0]?.content || null,
-        updatedAt: p.room.updatedAt,
+        updatedAt: p.room.messages[0]?.createdAt || p.room.updatedAt,
         displayTitle,
+        representativeImage: p.room.lesson?.representativeImage || p.room.meeting?.image || null,
       };
     });
   }

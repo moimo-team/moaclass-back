@@ -817,18 +817,29 @@ export class UsersService {
     }
 
     // 5. 익명화 및 Soft Delete 수행
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        email: `withdrawn_${userId}_${Date.now()}@moaclass.com`,
-        nickname: `(탈퇴한 사용자)_${userId}`,
-        providerId: `withdrawn_${userId}_${Date.now()}`,
-        image: null,
-        bio: null,
-        refreshToken: null,
-        deletedAt: now,
-      },
-    });
+    await this.prisma.$transaction([
+      // 사용자 익명화
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: `withdrawn_${userId}_${Date.now()}@moaclass.com`,
+          nickname: `(탈퇴한 사용자)_${userId}`,
+          providerId: `withdrawn_${userId}_${Date.now()}`,
+          image: null,
+          bio: null,
+          refreshToken: null,
+          deletedAt: now,
+        },
+      }),
+      // 생성한 클래스(레슨) 비활성화
+      this.prisma.lesson.updateMany({
+        where: { userId },
+        data: {
+          status: 'DELETED',
+          deletedAt: now,
+        },
+      }),
+    ]);
 
     return { success: true };
   }
