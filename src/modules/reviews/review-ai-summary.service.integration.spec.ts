@@ -113,7 +113,8 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
     uniqueSeq += 1;
     const token = uniqueSeq.toString().padStart(6, '0');
 
-    const regionName = `r_${token}`;
+    const scopeKey = runKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10);
+    const regionName = `r_${scopeKey}_${token}`;
     const regionRows = await prisma.$queryRawUnsafe<Array<{ id: number }>>(
       `
       WITH next_id AS (
@@ -132,7 +133,7 @@ describe('ReviewAiSummaryService (integration, real DB)', () => {
     }
     regionIds.push(regionId);
 
-    const categoryName = `c_${token}`;
+    const categoryName = `c_${scopeKey}_${token}`;
     const categoryRows = await prisma.$queryRawUnsafe<Array<{ id: number }>>(
       `
       WITH next_id AS (

@@ -555,6 +555,12 @@ export class ReviewsService {
                 title: true,
               },
             },
+            user: {
+              select: {
+                nickname: true,
+                image: true,
+              },
+            },
             userId: true,
             rating: true,
             content: true,
@@ -568,6 +574,8 @@ export class ReviewsService {
         lessonId: review.lessonId,
         lessonTitle: review.lesson.title,
         userId: review.userId,
+        nickname: review.user.nickname,
+        profileImage: review.user.image,
         rating: review.rating,
         content: review.content,
         representativeImage: review.representativeImage,
