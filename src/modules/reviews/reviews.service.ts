@@ -1,11 +1,11 @@
-﻿import {
+import {
   ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PointType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -172,9 +172,11 @@ export class ReviewsService {
 
     // ✅ 보상 지급 로직 (별도 예외 처리 및 비동기 실행)
     // 포인트는 리뷰 작성 시 항상 지급하고, 이미지 리뷰는 쿠폰을 추가 지급한다.
-    this.pointsService.earnPoints(userId, 1000).catch((err) => {
-      console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
-    });
+    this.pointsService
+      .earnPoints(userId, 1000, PointType.EVENT)
+      .catch((err) => {
+        console.error(`리뷰 보상 포인트 적립 실패 (userId: ${userId}):`, err);
+      });
 
     const hasImage = !!representativeImage || reviewImages.length > 0;
     if (hasImage) {

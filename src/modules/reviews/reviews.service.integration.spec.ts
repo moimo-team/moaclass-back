@@ -1,8 +1,9 @@
-﻿import {
+import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { PointType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ReviewsService } from './reviews.service';
 
@@ -21,7 +22,7 @@ describe('ReviewsService (integration, real DB)', () => {
   };
 
   const pointsService = {
-    earnPoints: jest.fn<Promise<void>, [number, number]>(),
+    earnPoints: jest.fn<Promise<void>, [number, number, PointType?]>(),
   };
 
   let uniqueSeq = 0;
@@ -283,7 +284,11 @@ describe('ReviewsService (integration, real DB)', () => {
 
     expect(review.representativeImage).toBeNull();
     expect(review.images).toHaveLength(0);
-    expect(pointsService.earnPoints).toHaveBeenCalledWith(reviewer.id, 1000);
+    expect(pointsService.earnPoints).toHaveBeenCalledWith(
+      reviewer.id,
+      1000,
+      PointType.EVENT,
+    );
     expect(couponsService.issueReviewRewardCoupon).not.toHaveBeenCalled();
   });
 
@@ -347,7 +352,11 @@ describe('ReviewsService (integration, real DB)', () => {
     expect(couponsService.issueReviewRewardCoupon).toHaveBeenCalledWith(
       reviewer.id,
     );
-    expect(pointsService.earnPoints).toHaveBeenCalledWith(reviewer.id, 1000);
+    expect(pointsService.earnPoints).toHaveBeenCalledWith(
+      reviewer.id,
+      1000,
+      PointType.EVENT,
+    );
   });
 
   it('create: 내 결제(enrollment)가 아니면 ForbiddenException을 던진다', async () => {
