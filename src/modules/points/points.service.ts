@@ -5,11 +5,11 @@ import {
 } from '@nestjs/common';
 import { PointType, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+
 
 @Injectable()
 export class PointsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getMyPoints(userId: number) {
     const user = await this.prisma.user.findUnique({
@@ -53,12 +53,12 @@ export class PointsService {
         amount: signedAmount,
         coupon: t.coupon
           ? {
-              code: t.coupon.code,
-              discountType: t.coupon.discountType,
-              discountValue: t.coupon.discountValue,
-            }
+            code: t.coupon.code,
+            discountType: t.coupon.discountType,
+            discountValue: t.coupon.discountValue,
+          }
           : null,
-        createdAt: formatUtcDateToSeoulDateTime(t.createdAt),
+        createdAt: (t.createdAt),
       };
     });
 
@@ -107,7 +107,7 @@ export class PointsService {
           amount: transaction.amount,
           type: transaction.type,
           status: transaction.status,
-          createdAt: formatUtcDateToSeoulDateTime(transaction.createdAt),
+          createdAt: (transaction.createdAt),
         },
         userPoints: updatedUser.point,
       };

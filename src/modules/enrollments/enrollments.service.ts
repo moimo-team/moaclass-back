@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notification/notifications.service';
 import { MailsService } from '../mails/mails.service';
-import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+import { } from '../lessons/utils/schedule-time.util';
 import { CreateEnrollmentDto } from './dto/enrollments.dto';
 import {
   ParticipationStatus,
@@ -308,8 +308,8 @@ export class EnrollmentsService {
         lessonId: e.schedule.lessonId,
         image: e.schedule.lesson.representativeImage,
         title: e.schedule.lesson.title,
-        startAt: formatUtcDateToSeoulDateTime(e.schedule.startAt),
-        endAt: formatUtcDateToSeoulDateTime(e.schedule.endAt),
+        startAt: e.schedule.startAt,
+        endAt: e.schedule.endAt,
         status,
         transactionStatus: refundTx ? 'REFUNDED' : (useTx?.status ?? 'UNKNOWN'),
         transactionId: useTx?.id ?? null,
@@ -489,8 +489,8 @@ export class EnrollmentsService {
         title: schedule.lesson.title,
         teacherName:
           schedule.lesson.teacher.teacherProfile?.nickname ?? '알 수 없음',
-        startAt: formatUtcDateToSeoulDateTime(schedule.startAt),
-        endAt: formatUtcDateToSeoulDateTime(schedule.endAt),
+        startAt: schedule.startAt,
+        endAt: schedule.endAt,
       },
       paymentInfo: {
         originPrice,

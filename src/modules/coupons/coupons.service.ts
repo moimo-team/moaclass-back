@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { formatUtcDateToSeoulDateTime } from '../lessons/utils/schedule-time.util';
+import { } from '../lessons/utils/schedule-time.util';
 @Injectable()
 export class CouponsService {
   constructor(private readonly prisma: PrismaService) { }
@@ -15,10 +15,10 @@ export class CouponsService {
     if (!coupon) throw new NotFoundException('쿠폰을 찾을 수 없습니다.');
     return {
       ...coupon,
-      validFrom: formatUtcDateToSeoulDateTime(coupon.validFrom),
-      validUntil: formatUtcDateToSeoulDateTime(coupon.validUntil),
-      createdAt: formatUtcDateToSeoulDateTime(coupon.createdAt),
-      updatedAt: formatUtcDateToSeoulDateTime(coupon.updatedAt),
+      validFrom: (coupon.validFrom),
+      validUntil: (coupon.validUntil),
+      createdAt: (coupon.createdAt),
+      updatedAt: (coupon.updatedAt),
     };
   }
 
@@ -27,10 +27,10 @@ export class CouponsService {
     const coupons = await this.prisma.coupon.findMany();
     return coupons.map((coupon) => ({
       ...coupon,
-      validFrom: formatUtcDateToSeoulDateTime(coupon.validFrom),
-      validUntil: formatUtcDateToSeoulDateTime(coupon.validUntil),
-      createdAt: formatUtcDateToSeoulDateTime(coupon.createdAt),
-      updatedAt: formatUtcDateToSeoulDateTime(coupon.updatedAt),
+      validFrom: (coupon.validFrom),
+      validUntil: (coupon.validUntil),
+      createdAt: (coupon.createdAt),
+      updatedAt: (coupon.updatedAt),
     }));
   }
 
@@ -363,11 +363,11 @@ export class CouponsService {
         description: uc.coupon.description,
         discountType: uc.coupon.discountType,
         discountValue: uc.coupon.discountValue,
-        validFrom: formatUtcDateToSeoulDateTime(uc.coupon.validFrom),
-        validUntil: formatUtcDateToSeoulDateTime(uc.expiresAt ?? uc.coupon.validUntil),
+        validFrom: (uc.coupon.validFrom),
+        validUntil: (uc.expiresAt ?? uc.coupon.validUntil),
         isUsed: uc.isUsed,
-        usedAt: uc.usedAt ? formatUtcDateToSeoulDateTime(uc.usedAt) : null,
-        issuedAt: formatUtcDateToSeoulDateTime(uc.issuedAt),
+        usedAt: uc.usedAt ? (uc.usedAt) : null,
+        issuedAt: (uc.issuedAt),
         status,
       };
     });
